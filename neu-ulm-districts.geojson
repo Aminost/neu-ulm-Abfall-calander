@@ -1,0 +1,43 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Pfuhl",
+        "id": 5
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [10.02, 48.41],
+            [10.03, 48.41],
+            [10.03, 48.42],
+            [10.02, 48.42],
+            [10.02, 48.41]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Offenhausen",
+        "id": 4
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [10.01, 48.39],
+            [10.02, 48.39],
+            [10.02, 48.40],
+            [10.01, 48.40],
+            [10.01, 48.39]
+          ]
+        ]
+      }
+    }
+  ]
+}

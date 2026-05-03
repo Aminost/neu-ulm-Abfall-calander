@@ -1,0 +1,44 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+
+# Environment files — never commit secrets
+.env
+.env.local
+.env.production
+!.env.example
+
+# Expo
+.expo/
+expo-env.d.ts
+
+# NativeWind
+nativewind-env.d.ts
+
+# EAS / App Store secrets — NEVER commit these
+google-play-key.json
+*.jks
+*.keystore
+*.p8
+*.p12
+*.mobileprovision
+credentials.json
+
+# Web build output
+web-build/
+dist/
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Editor
+.idea/
+.vscode/
+*.swp
+
+# @generated expo-cli sync-2b81b286409207a5da26e14c78851eb30d8ccbdb
+# @end expo-cli
