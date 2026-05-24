@@ -12,7 +12,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#10b981"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "de.neuulm.muellkalender",
@@ -72,8 +74,10 @@
     "extra": {
       "apiUrl": "",
       "eas": {
-        "projectId": ""
-      }
-    }
+        "projectId": "643ce0a4-ae21-40f7-a142-51fedc88aa72"
+      },
+      "router": {}
+    },
+    "owner": "guedria"
   }
 }
