@@ -46,11 +46,6 @@
   },
   "submit": {
     "production": {
-      "ios": {
-        "appleId": "guedria.amine@gmail.com",
-        "ascAppId": "",
-        "appleTeamId": ""
-      },
       "android": {
         "serviceAccountKeyPath": "./google-play-key.json",
         "track": "production"
