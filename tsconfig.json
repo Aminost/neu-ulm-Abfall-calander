@@ -13,8 +13,8 @@
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
-    "moduleResolution": "node",
-    "module": "esnext"
+    "moduleResolution": "bundler",
+    "module": "preserve"
   },
   "include": [
     "**/*.ts",
@@ -25,6 +25,8 @@
     ".expo/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "check_zones.ts",
+    "map.web.tsx"
   ]
 }
