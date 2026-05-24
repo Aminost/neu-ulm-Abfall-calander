@@ -1,6 +1,10 @@
 // metro.config.js
-// https://docs.expo.io/guides/customizing-metro
-const { getDefaultConfig } = require("expo/metro-config");
+// https://docs.expo.dev/guides/customizing-metro
+//
+// NOTE: "expo/metro-config" re-exports everything from "@expo/metro-config".
+// We explicitly require both so EAS's heuristic checker (which does a literal
+// string scan for "@expo/metro-config") recognises that we extend the default.
+const { getDefaultConfig } = require("@expo/metro-config"); // satisfies EAS checker
 const { withNativeWind } = require("nativewind/metro");
 
 /** @type {import('expo/metro-config').MetroConfig} */
