@@ -333,9 +333,28 @@ finalConfig.resolver.sourceExts = finalConfig.resolver.sourceExts
 
 After any `metro.config.js` change, restart with `--clear`.
 
-### `space-y-* is deprecated` warning, then `Couldn't find a navigation context`
+### `Couldn't find a navigation context` — NativeWind printUpgradeWarning bug
 
-NativeWind v4 dropped `space-y-*`/`space-x-*`. The runtime tries to JSON-stringify the component tree to print an upgrade warning, and stringification triggers a navigation-context getter that throws. Replace with `gap-N` on the parent View — RN Views default to `flex-direction: column`, so spacing is identical.
+`react-native-css-interop` v0.2.3 (shipped by `nativewind@4`) calls
+`JSON.stringify(originalProps)` inside its `printUpgradeWarning` to dump the
+component tree on any "you upgraded a class" hint. The stringify walks the
+tree and evaluates `@react-navigation/core`'s `getKey` getter, which throws
+when the component is rendered outside a navigation container. The thrown
+error reaches the ErrorBoundary and replaces the screen.
+
+Fix: `patches/react-native-css-interop+0.2.3.patch` neutralises the warning
+function. The `postinstall` script runs `patch-package` automatically on
+every `npm install`, so the fix is sticky and reapplied if anyone reinstalls
+node_modules.
+
+If you bump `nativewind` and the patch no longer applies cleanly, regenerate
+it from the new render-component.js by replacing the `printUpgradeWarning`
+body with a no-op and running `npx patch-package react-native-css-interop`.
+
+(Replacing deprecated v3 classes — `space-y-*`/`space-x-*`, `bg-white/50`,
+`opacity-80` — with `gap-*` and inline `style={…}` is also done in the
+codebase, but on its own isn't enough because NativeWind also fires the
+warning for animation/pseudo-class transitions, etc.)
 
 ### Address search returns no results on web
 

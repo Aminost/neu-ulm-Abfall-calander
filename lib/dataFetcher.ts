@@ -166,6 +166,38 @@ export async function clearIcsCache(districtId: number): Promise<void> {
   ]);
 }
 
+/**
+ * Force-refresh: clears the ICS cache for a district, fetches fresh data
+ * directly from the city website, and returns events.
+ * Falls back to the built-in 2026 calendar if the network is unavailable.
+ */
+export async function forceRefreshIcs(
+  districtId: number
+): Promise<CollectionEvent[]> {
+  await clearIcsCache(districtId);
+  try {
+    const fresh = await _fetchAndCache(districtId);
+    if (fresh.length > 0) return fresh;
+  } catch (err) {
+    console.warn(`forceRefreshIcs: network failed for district ${districtId}`, err);
+  }
+  // Network failed — fall back to built-in calendar so UI stays populated.
+  return getBuiltinEvents(districtId);
+}
+
+/**
+ * Returns the Unix timestamp (ms) of the last successful ICS cache write for
+ * the given district, or null if no cache has ever been stored.
+ */
+export async function getLastUpdateTimestamp(
+  districtId: number
+): Promise<number | null> {
+  const tsStr = await storage.getItem(cacheTsKey(districtId));
+  if (!tsStr) return null;
+  const ts = Number(tsStr);
+  return isNaN(ts) ? null : ts;
+}
+
 // ── Internal: network fetch + cache ───────────────────────────────────────────
 
 async function _fetchAndCache(districtId: number): Promise<CollectionEvent[]> {

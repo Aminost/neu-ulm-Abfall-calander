@@ -21,6 +21,11 @@ import React, {
   type ReactNode,
 } from "react";
 import { storage } from "./storage";
+import type { CollectionEvent } from "./icsParser";
+import {
+  forceRefreshIcs,
+  getLastUpdateTimestamp,
+} from "./dataFetcher";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -39,6 +44,12 @@ export interface AppStateValue {
   districtAutoDetected: boolean;
   /** False until the initial AsyncStorage load completes. */
   isLoaded: boolean;
+
+  /** Unix timestamp (ms) of the last successful data fetch for the active
+   *  district. null if the cache has never been populated. */
+  lastUpdated: number | null;
+  /** True while a manual refresh is in progress. */
+  isRefreshing: boolean;
 
   /**
    * Update district (and optionally address + autoDetected flag).
@@ -69,6 +80,20 @@ export interface AppStateValue {
 
   /** Change the daily reminder time. Persists to AsyncStorage. */
   updateReminderTime: (time: string) => Promise<void>;
+
+  /**
+   * Force-refresh ICS data for the active district from the city website.
+   * Clears the local cache, fetches fresh data, and updates lastUpdated.
+   * Returns the fetched events (or falls back to the built-in calendar).
+   */
+  refreshData: () => Promise<{ success: boolean; events: CollectionEvent[] }>;
+
+  /**
+   * Re-reads and syncs lastUpdated from the ICS cache timestamp.
+   * Call this after fetchCollectionEvents completes so the UI reflects the
+   * correct "last updated" timestamp even for background refreshes.
+   */
+  syncLastUpdated: () => Promise<void>;
 }
 
 // ── Context ────────────────────────────────────────────────────────────────────
@@ -85,6 +110,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [reminderTime,          setReminderTimeState]          = useState("18:00");
   const [districtAutoDetected,  setDistrictAutoDetectedState]  = useState(false);
   const [isLoaded,              setIsLoaded]                   = useState(false);
+  const [lastUpdated,           setLastUpdated]                = useState<number | null>(null);
+  const [isRefreshing,          setIsRefreshing]               = useState(false);
 
   // ── Initial load ──────────────────────────────────────────────────────────
   // Race the storage read against a 2-second timeout so a slow/broken
@@ -140,7 +167,39 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // ── Sync lastUpdated from cache whenever the active district changes ─────────
+  useEffect(() => {
+    if (!isLoaded) return;
+    getLastUpdateTimestamp(districtId).then((ts) => setLastUpdated(ts));
+  }, [districtId, isLoaded]);
+
   // ── Update helpers ────────────────────────────────────────────────────────
+
+  const syncLastUpdated = useCallback(async () => {
+    const ts = await getLastUpdateTimestamp(districtId);
+    setLastUpdated(ts);
+  }, [districtId]);
+
+  const refreshData = useCallback(async (): Promise<{
+    success: boolean;
+    events: CollectionEvent[];
+  }> => {
+    setIsRefreshing(true);
+    try {
+      const events = await forceRefreshIcs(districtId);
+      const ts = await getLastUpdateTimestamp(districtId);
+      // forceRefreshIcs returns built-in events when network fails, so
+      // only mark success when we actually persisted a fresh cache (ts changed).
+      const success = events.length > 0 && ts !== null && ts > (lastUpdated ?? 0);
+      if (ts !== null) setLastUpdated(ts);
+      return { success, events };
+    } catch (err) {
+      console.warn("[AppState] refreshData error:", err);
+      return { success: false, events: [] };
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [districtId, lastUpdated]);
 
   const updateDistrict = useCallback(
     async (id: number, addr?: string, autoDetected?: boolean) => {
@@ -220,10 +279,14 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         reminderTime,
         districtAutoDetected,
         isLoaded,
+        lastUpdated,
+        isRefreshing,
         updateDistrict,
         applyDetectedLocation,
         updateNotifications,
         updateReminderTime,
+        refreshData,
+        syncLastUpdated,
       }}
     >
       {children}

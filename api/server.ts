@@ -25,7 +25,7 @@ const PORT = parseInt(process.env.PORT ?? "3001", 10);
 
 // ── Shared headers ─────────────────────────────────────────────────────────────
 
-const USER_AGENT = "NeuUlmWasteCalendarApp/1.3.0 (proxy; guedria.amine@gmail.com)";
+const USER_AGENT = "NeuUlmWasteCalendarApp/1.4.0 (proxy; guedria.amine@gmail.com)";
 
 // ── CORS ───────────────────────────────────────────────────────────────────────
 

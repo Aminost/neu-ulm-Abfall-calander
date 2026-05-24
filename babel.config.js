@@ -3,10 +3,10 @@ module.exports = function (api) {
   return {
     presets: [
       ["babel-preset-expo", { jsxImportSource: "nativewind" }],
+      "nativewind/babel", // <-- Moved here!
     ],
     plugins: [
-      // react-native-reanimated must be last
-      "react-native-reanimated/plugin",
+      "react-native-worklets/plugin", // Keep this as the only plugin
     ],
   };
 };

@@ -1,0 +1,14 @@
+diff --git a/node_modules/react-native-css-interop/dist/runtime/native/render-component.js b/node_modules/react-native-css-interop/dist/runtime/native/render-component.js
+--- a/node_modules/react-native-css-interop/dist/runtime/native/render-component.js
++++ b/node_modules/react-native-css-interop/dist/runtime/native/render-component.js
+@@ -117,9 +117,7 @@
+     animatedCache.set(Component, AnimatedComponent);
+     return AnimatedComponent;
+ }
+-function printUpgradeWarning(warning, originalProps) {
+-    console.log(`CssInterop upgrade warning.\n\n${warning}.\n\nThis warning was caused by a component with the props:\n${stringify(originalProps)}\n\nIf adding or removing sibling components caused this warning you should add a unique "key" prop to your components. https://react.dev/learn/rendering-lists#keeping-list-items-in-order-with-key\n`);
+-}
++function printUpgradeWarning(_warning, _originalProps) { /* patched: silence NativeWind upgrade warning that crashes navigation context */ }
+ function stringify(object) {
+     const seen = new WeakSet();
+     return JSON.stringify(object, function replace(_, value) {

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as SplashScreen from "expo-splash-screen";
@@ -29,8 +30,11 @@ import {
   Calendar as CalendarIcon,
   Bell,
   BellRing,
+  RefreshCw,
+  CheckCircle2,
+  WifiOff,
 } from "lucide-react-native";
-import { fetchCollectionEvents, looksLikeCoordinates } from "../../lib/dataFetcher";
+import { fetchCollectionEvents, looksLikeCoordinates, getLastUpdateTimestamp } from "../../lib/dataFetcher";
 import type { CollectionEvent, WasteType } from "../../lib/icsParser";
 import { useTranslation } from "../../lib/i18n";
 import type { Language } from "../../lib/i18n";
@@ -92,6 +96,23 @@ const DATE_LOCALES: Record<Language, import("date-fns").Locale> = {
   de, en: enUS, tr, ar, fr, hi, es, ru,
 };
 
+/** 28 days — triggers a monthly auto-refresh when exceeded. */
+const MONTHLY_REFRESH_MS = 28 * 24 * 60 * 60 * 1000;
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+/** Format a Unix timestamp into a human-readable "X ago" string. */
+function formatAge(ts: number, t: (key: string, p?: Record<string, string | number>) => string): string {
+  const age = Date.now() - ts;
+  const minutes = Math.floor(age / 60_000);
+  const hours   = Math.floor(age / 3_600_000);
+  const days    = Math.floor(age / 86_400_000);
+  if (minutes < 2)  return t("justNow");
+  if (hours   < 1)  return t("minutesAgo", { n: minutes });
+  if (days    < 1)  return t("hoursAgo",   { n: hours });
+  return t("daysAgo", { n: days });
+}
+
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
@@ -105,28 +126,70 @@ export default function HomeScreen() {
     reminderTime,
     isLoaded: appLoaded,
     updateNotifications,
+    lastUpdated,
+    isRefreshing,
+    refreshData,
+    syncLastUpdated,
   } = useAppState();
 
-  // Local screen state
-  const [events,       setEvents]       = useState<CollectionEvent[]>([]);
-  const [loading,      setLoading]      = useState(true);
-  const [viewMode,     setViewMode]     = useState<"list" | "calendar">("list");
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [splashHidden, setSplashHidden] = useState(false);
+  // ── Local screen state ─────────────────────────────────────────────────────
+  const [events,        setEvents]        = useState<CollectionEvent[]>([]);
+  const [loading,       setLoading]       = useState(true);
+  const [viewMode,      setViewMode]      = useState<"list" | "calendar">("list");
+  const [selectedDate,  setSelectedDate]  = useState<Date>(new Date());
+  const [splashHidden,  setSplashHidden]  = useState(false);
+  const [toastVisible,  setToastVisible]  = useState(false);
+  const [toastType,     setToastType]     = useState<"success" | "error" | "info">("success");
+  const [toastMsg,      setToastMsg]      = useState("");
+
+  // Spinning animation for the refresh icon
+  const spinAnim = useRef(new Animated.Value(0)).current;
+  const spinLoop = useRef<Animated.CompositeAnimation | null>(null);
+
+  // ── Start / stop spinner when isRefreshing changes ─────────────────────────
+  useEffect(() => {
+    if (isRefreshing) {
+      spinAnim.setValue(0);
+      spinLoop.current = Animated.loop(
+        Animated.timing(spinAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        })
+      );
+      spinLoop.current.start();
+    } else {
+      spinLoop.current?.stop();
+      spinAnim.setValue(0);
+    }
+    return () => { spinLoop.current?.stop(); };
+  }, [isRefreshing, spinAnim]);
+
+  const spin = spinAnim.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
+
+  // ── Toast helper ──────────────────────────────────────────────────────────
+  const showToast = useCallback(
+    (msg: string, type: "success" | "error" | "info" = "success") => {
+      setToastMsg(msg);
+      setToastType(type);
+      setToastVisible(true);
+      setTimeout(() => setToastVisible(false), 3500);
+    },
+    []
+  );
 
   // ── Fetch events whenever the district changes ─────────────────────────────
-  // appLoaded prevents a double-fetch: first with the default districtId=5,
-  // then again once AsyncStorage resolves the real saved district.
   useEffect(() => {
     if (!appLoaded) return;
     console.info(`[Home] districtId changed to ${districtId} — refetching events`);
     setLoading(true);
     fetchCollectionEvents(districtId)
-      .then((evs) => {
+      .then(async (evs) => {
         console.info(`[Home] fetched ${evs.length} events for Bezirk ${districtId}`);
         setEvents(evs);
-        // Re-schedule notifications whenever the district (and hence the
-        // event list) changes, so we never alert for an old Bezirk's dates.
+        // Sync the last-updated timestamp now that fetch has completed
+        // (fetchCollectionEvents may have written a fresh cache in background).
+        await syncLastUpdated();
         if (notificationsEnabled && Platform.OS !== "web") {
           scheduleReminders(evs, reminderTime, 1, makeLabels()).catch((err) =>
             console.warn("re-schedule on district change failed", err)
@@ -137,6 +200,33 @@ export default function HomeScreen() {
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [districtId, appLoaded]);
+
+  // ── Monthly auto-refresh ───────────────────────────────────────────────────
+  // After the initial events load, check if data is older than ~28 days.
+  // If so, silently fetch fresh data from the city website in the background.
+  const autoRefreshDone = useRef(false);
+  useEffect(() => {
+    if (loading || !appLoaded || autoRefreshDone.current) return;
+    autoRefreshDone.current = true;
+
+    const check = async () => {
+      const ts = await getLastUpdateTimestamp(districtId);
+      const needsRefresh = !ts || (Date.now() - ts) > MONTHLY_REFRESH_MS;
+      if (!needsRefresh) return;
+
+      console.info("[Home] Monthly auto-refresh triggered (data age > 28 days)");
+      const result = await refreshData();
+      if (result.success && result.events.length > 0) {
+        setEvents(result.events);
+        showToast(t("autoRefreshed"), "info");
+        if (notificationsEnabled && Platform.OS !== "web") {
+          scheduleReminders(result.events, reminderTime, 1, makeLabels()).catch(() => {});
+        }
+      }
+    };
+    check();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, appLoaded]);
 
   // ── Hide splash screen once initial data is ready ──────────────────────────
   const onLayoutReady = useCallback(async () => {
@@ -158,11 +248,28 @@ export default function HomeScreen() {
     [t]
   );
 
+  // ── Manual refresh handler ─────────────────────────────────────────────────
+  const handleRefresh = useCallback(async () => {
+    if (isRefreshing) return;
+    const result = await refreshData();
+    if (result.success && result.events.length > 0) {
+      setEvents(result.events);
+      showToast(t("dataUpdated"), "success");
+      if (notificationsEnabled && Platform.OS !== "web") {
+        scheduleReminders(result.events, reminderTime, 1, makeLabels()).catch(() => {});
+      }
+    } else if (result.events.length > 0) {
+      // Got events (from cache/built-in) but didn't get a fresh network response
+      setEvents(result.events);
+      showToast(t("dataAlreadyFresh"), "info");
+    } else {
+      showToast(t("dataUpdateFailed"), "error");
+    }
+  }, [isRefreshing, refreshData, notificationsEnabled, reminderTime, makeLabels, showToast, t]);
+
   // ── Notification toggle ────────────────────────────────────────────────────
 
   const handleToggleReminders = async () => {
-    // Web: persist the preference so it carries over to a native install,
-    // but show a one-time hint that web preview cannot fire pushes.
     if (Platform.OS === "web") {
       const next = !notificationsEnabled;
       await updateNotifications(next);
@@ -215,13 +322,12 @@ export default function HomeScreen() {
   const dateLocale     = DATE_LOCALES[language];
 
   const getDaysText = (date: Date) => {
-    if (isToday(date))   return t("today");
+    if (isToday(date))    return t("today");
     if (isTomorrow(date)) return t("tomorrow");
     return t("inDays", { days: differenceInDays(startOfDay(date), today) });
   };
 
-  // Build react-native-calendars marked dates — defensively, so a single bad
-  // event date or unknown waste type can never crash the calendar view.
+  // Build react-native-calendars marked dates
   type MarkedDate = { dots: { key: string; color: string }[]; selected?: boolean; selectedColor?: string };
   const markedDates: Record<string, MarkedDate> = {};
 
@@ -232,16 +338,11 @@ export default function HomeScreen() {
     let key: string;
     try { key = format(event.date, "yyyy-MM-dd"); } catch { continue; }
     if (!markedDates[key]) markedDates[key] = { dots: [] };
-    // Dedupe dots within a day (multiple R/B events on same day → 1 dot)
     if (!markedDates[key].dots.some((d) => d.key === event.type)) {
-      markedDates[key].dots.push({
-        key: event.type,
-        color: cfg.calendarDotColor,
-      });
+      markedDates[key].dots.push({ key: event.type, color: cfg.calendarDotColor });
     }
   }
 
-  // Mark the selected date — guard against an invalid Date
   let selectedKey = "";
   if (selectedDate && !isNaN(selectedDate.getTime())) {
     try { selectedKey = format(selectedDate, "yyyy-MM-dd"); } catch { /* ignore */ }
@@ -258,44 +359,99 @@ export default function HomeScreen() {
     (e) => e.date && !isNaN(e.date.getTime()) && isSameDay(e.date, selectedDate)
   );
 
+  // Toast colours
+  const toastBg   = toastType === "success" ? "#ecfdf5" : toastType === "error" ? "#fef2f2" : "#eff6ff";
+  const toastBdr  = toastType === "success" ? "#6ee7b7" : toastType === "error" ? "#fca5a5" : "#93c5fd";
+  const toastText = toastType === "success" ? "#065f46" : toastType === "error" ? "#991b1b" : "#1e40af";
+  const ToastIcon = toastType === "success" ? CheckCircle2 : toastType === "error" ? WifiOff : CheckCircle2;
+  const toastIconColor = toastType === "success" ? "#059669" : toastType === "error" ? "#dc2626" : "#3b82f6";
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50" onLayout={onLayoutReady}>
+      {/* ── In-app toast ── */}
+      {toastVisible && (
+        <View
+          style={{
+            position: "absolute", top: 52, left: 16, right: 16, zIndex: 999,
+            flexDirection: "row", alignItems: "center", gap: 10,
+            backgroundColor: toastBg, borderWidth: 1, borderColor: toastBdr,
+            borderRadius: 16, paddingHorizontal: 16, paddingVertical: 12,
+            shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 12, elevation: 6,
+          }}
+        >
+          <ToastIcon size={18} color={toastIconColor} />
+          <Text style={{ flex: 1, fontSize: 13, fontWeight: "600", color: toastText }} numberOfLines={2}>
+            {toastMsg}
+          </Text>
+        </View>
+      )}
+
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
       >
         {/* ── Header ── */}
-        <View className="px-6 py-8 flex-row justify-between items-start">
-          <View className="flex-1 mr-4">
+        <View className="px-6 pt-8 pb-4 flex-row justify-between items-start">
+          <View className="flex-1 mr-3">
             <Text className="text-3xl font-bold text-gray-900 tracking-tight">
               {t("calendarTitle")}
             </Text>
-            {/* Full address — shows complete street + postcode + Stadtteil.
-                Never show raw coordinates; fall back to "Bezirk N" instead. */}
+            {/* Address */}
             <Text className="text-gray-500 mt-1" numberOfLines={2}>
               {address && !looksLikeCoordinates(address) ? address : `Bezirk ${districtId}`}
             </Text>
-            <Text className="text-emerald-600 text-xs font-semibold mt-1">
-              Bezirk {districtId}
-            </Text>
+            {/* Bezirk badge + last-updated */}
+            <View className="flex-row items-center gap-2 mt-1 flex-wrap">
+              <View className="bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full self-start">
+                <Text className="text-emerald-600 text-xs font-semibold">
+                  Bezirk {districtId}
+                </Text>
+              </View>
+              {lastUpdated ? (
+                <Text className="text-gray-400 text-xs">
+                  {t("lastUpdated")}: {formatAge(lastUpdated, t)}
+                </Text>
+              ) : null}
+            </View>
           </View>
-          {/* View mode toggle */}
-          <View className="flex-row bg-gray-200 p-1 rounded-xl">
+
+          {/* Right controls: refresh + view-mode toggle */}
+          <View className="flex-row items-center gap-2">
+            {/* Refresh button */}
             <TouchableOpacity
-              onPress={() => setViewMode("list")}
-              className={`p-2 rounded-lg ${viewMode === "list" ? "bg-white shadow-sm" : ""}`}
+              onPress={handleRefresh}
+              disabled={isRefreshing}
+              className="p-2 rounded-xl bg-white border border-gray-200"
+              style={{ shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 }}
+              accessibilityLabel={t("refreshData")}
             >
-              <List size={20} color={viewMode === "list" ? "#111827" : "#6b7280"} />
+              {isRefreshing ? (
+                <ActivityIndicator size="small" color="#10b981" style={{ width: 20, height: 20 }} />
+              ) : (
+                <Animated.View style={{ transform: [{ rotate: spin }] }}>
+                  <RefreshCw size={20} color="#374151" />
+                </Animated.View>
+              )}
             </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => setViewMode("calendar")}
-              className={`p-2 rounded-lg ${viewMode === "calendar" ? "bg-white shadow-sm" : ""}`}
-            >
-              <CalendarIcon size={20} color={viewMode === "calendar" ? "#111827" : "#6b7280"} />
-            </TouchableOpacity>
+
+            {/* List / Calendar toggle */}
+            <View className="flex-row bg-gray-200 p-1 rounded-xl">
+              <TouchableOpacity
+                onPress={() => setViewMode("list")}
+                className={`p-2 rounded-lg ${viewMode === "list" ? "bg-white shadow-sm" : ""}`}
+              >
+                <List size={20} color={viewMode === "list" ? "#111827" : "#6b7280"} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setViewMode("calendar")}
+                className={`p-2 rounded-lg ${viewMode === "calendar" ? "bg-white shadow-sm" : ""}`}
+              >
+                <CalendarIcon size={20} color={viewMode === "calendar" ? "#111827" : "#6b7280"} />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
@@ -423,8 +579,6 @@ export default function HomeScreen() {
             style={{ shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 8, elevation: 2 }}
           >
             <Calendar
-              // Remount the calendar when the active district changes — keeps
-              // marked dots in sync with whatever events were just loaded.
               key={`cal-${districtId}`}
               markingType="multi-dot"
               markedDates={markedDates}
@@ -456,7 +610,6 @@ export default function HomeScreen() {
                     const cfg = WASTE_CONFIG[event.type];
                     if (!cfg) return null;
                     const { Icon, iconBg, color } = cfg;
-                    // Date for the row — short form, e.g. "Mi, 14. Jan."
                     const dayLabel =
                       event.date && !isNaN(event.date.getTime())
                         ? format(event.date, "EEE, d. MMM", { locale: dateLocale })

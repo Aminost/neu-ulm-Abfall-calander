@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -25,6 +25,10 @@ import {
   Info,
   Locate,
   CheckCircle,
+  RefreshCw,
+  Database,
+  CheckCircle2,
+  WifiOff,
 } from "lucide-react-native";
 import { storage } from "../../lib/storage";
 import { BEZIRKE } from "../../lib/constants";
@@ -41,6 +45,19 @@ import {
 import { useTranslation } from "../../lib/i18n";
 import type { Language } from "../../lib/i18n";
 import { useAppState } from "../../lib/appState";
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+function formatAge(ts: number, t: (key: string, p?: Record<string, string | number>) => string): string {
+  const age = Date.now() - ts;
+  const minutes = Math.floor(age / 60_000);
+  const hours   = Math.floor(age / 3_600_000);
+  const days    = Math.floor(age / 86_400_000);
+  if (minutes < 2)  return t("justNow");
+  if (hours   < 1)  return t("minutesAgo", { n: minutes });
+  if (days    < 1)  return t("hoursAgo",   { n: hours });
+  return t("daysAgo", { n: days });
+}
 
 // ── Config ─────────────────────────────────────────────────────────────────────
 
@@ -101,6 +118,9 @@ export default function SettingsScreen() {
     updateDistrict,
     updateNotifications,
     updateReminderTime,
+    lastUpdated,
+    isRefreshing,
+    refreshData,
   } = useAppState();
 
   // ── UI-only local state ──
@@ -109,10 +129,36 @@ export default function SettingsScreen() {
   const [showDistrictPicker, setShowDistrictPicker] = useState(false);
   const [showTimePicker,     setShowTimePicker]     = useState(false);
   const [showLanguagePicker, setShowLanguagePicker] = useState(false);
+  const [toastVisible,       setToastVisible]       = useState(false);
+  const [toastType,          setToastType]          = useState<"success" | "error" | "info">("success");
+  const [toastMsg,           setToastMsg]           = useState("");
 
-  // The "auto-detected" badge mirrors AppState directly — so a location
-  // detected on the Map tab updates the badge here live.
+  // The "auto-detected" badge mirrors AppState directly.
   const autoDetected = districtAutoDetected;
+
+  // ── Toast helper ───────────────────────────────────────────────────────────
+  const showToast = useCallback(
+    (msg: string, type: "success" | "error" | "info" = "success") => {
+      setToastMsg(msg);
+      setToastType(type);
+      setToastVisible(true);
+      setTimeout(() => setToastVisible(false), 3500);
+    },
+    []
+  );
+
+  // ── Manual data refresh ────────────────────────────────────────────────────
+  const handleRefreshData = useCallback(async () => {
+    if (isRefreshing) return;
+    const result = await refreshData();
+    if (result.success) {
+      showToast(t("dataUpdated"), "success");
+    } else if (result.events.length > 0) {
+      showToast(t("dataAlreadyFresh"), "info");
+    } else {
+      showToast(t("dataUpdateFailed"), "error");
+    }
+  }, [isRefreshing, refreshData, showToast, t]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -265,8 +311,33 @@ export default function SettingsScreen() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
+  // Toast style helpers
+  const toastBg      = toastType === "success" ? "#ecfdf5" : toastType === "error" ? "#fef2f2" : "#eff6ff";
+  const toastBdr     = toastType === "success" ? "#6ee7b7" : toastType === "error" ? "#fca5a5" : "#93c5fd";
+  const toastTxt     = toastType === "success" ? "#065f46" : toastType === "error" ? "#991b1b" : "#1e40af";
+  const ToastIcon    = toastType === "error" ? WifiOff : CheckCircle2;
+  const toastIconClr = toastType === "success" ? "#059669" : toastType === "error" ? "#dc2626" : "#3b82f6";
+
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
+      {/* In-app toast */}
+      {toastVisible && (
+        <View
+          style={{
+            position: "absolute", top: 52, left: 16, right: 16, zIndex: 999,
+            flexDirection: "row", alignItems: "center", gap: 10,
+            backgroundColor: toastBg, borderWidth: 1, borderColor: toastBdr,
+            borderRadius: 16, paddingHorizontal: 16, paddingVertical: 12,
+            shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 12, elevation: 6,
+          }}
+        >
+          <ToastIcon size={18} color={toastIconClr} />
+          <Text style={{ flex: 1, fontSize: 13, fontWeight: "600", color: toastTxt }} numberOfLines={2}>
+            {toastMsg}
+          </Text>
+        </View>
+      )}
+
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 100 }}
@@ -444,6 +515,51 @@ export default function SettingsScreen() {
           )}
         </Card>
 
+        {/* ── Data / Refresh ── */}
+        <SectionHeader title={t("dataSection")} />
+        <Card>
+          {/* Last-updated row */}
+          <View style={{ flexDirection: "row", alignItems: "center",
+                         paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12 }}>
+            <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: "#f3f4f6",
+                           alignItems: "center", justifyContent: "center", marginRight: 12 }}>
+              <Database size={18} color="#374151" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 14, fontWeight: "600", color: "#111827" }}>
+                {t("lastUpdated")}
+              </Text>
+              <Text style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>
+                {lastUpdated ? formatAge(lastUpdated, t) : t("neverUpdated")}
+              </Text>
+            </View>
+          </View>
+
+          {/* Refresh button */}
+          <View style={{ paddingHorizontal: 16, paddingBottom: 14,
+                         borderTopWidth: 1, borderTopColor: "#f9fafb", paddingTop: 12 }}>
+            <TouchableOpacity
+              onPress={handleRefreshData}
+              disabled={isRefreshing}
+              style={{
+                flexDirection: "row", alignItems: "center", justifyContent: "center",
+                gap: 8, backgroundColor: "#10b981", paddingVertical: 12, borderRadius: 12,
+                opacity: isRefreshing ? 0.7 : 1,
+              }}
+            >
+              {isRefreshing
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <RefreshCw size={16} color="#fff" />}
+              <Text style={{ color: "#fff", fontWeight: "600", fontSize: 14 }}>
+                {isRefreshing ? t("refreshing") : t("refreshData")}
+              </Text>
+            </TouchableOpacity>
+            <Text style={{ fontSize: 11, color: "#9ca3af", textAlign: "center", marginTop: 8 }}>
+              {t("manualCalendarImportDesc")}
+            </Text>
+          </View>
+        </Card>
+
         {/* ── Calendar Import ── */}
         <SectionHeader title={t("manualCalendarImport")} />
         <Card>
@@ -593,7 +709,7 @@ export default function SettingsScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 14, fontWeight: "600", color: "#111827" }}>{t("version")}</Text>
-              <Text style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>1.3.0</Text>
+              <Text style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>1.4.0</Text>
             </View>
           </View>
         </Card>
