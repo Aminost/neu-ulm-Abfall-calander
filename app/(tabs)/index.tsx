@@ -317,8 +317,13 @@ export default function HomeScreen() {
 
   const today          = startOfDay(new Date());
   const futureEvents   = events.filter((e) => e.date >= today);
-  const nextEvent      = futureEvents[0];
-  const upcomingEvents = futureEvents.slice(1, 15);
+  // Group all events on the very next pickup date together so that
+  // multiple waste types on the same day are ALL shown in the hero card.
+  const nextDate       = futureEvents[0]?.date ?? null;
+  const nextEvents     = nextDate ? futureEvents.filter((e) => isSameDay(e.date, nextDate)) : [];
+  const upcomingEvents = nextDate
+    ? futureEvents.filter((e) => !isSameDay(e.date, nextDate)).slice(0, 15)
+    : [];
   const dateLocale     = DATE_LOCALES[language];
 
   const getDaysText = (date: Date) => {
@@ -484,48 +489,79 @@ export default function HomeScreen() {
         {/* ── List view ── */}
         {viewMode === "list" ? (
           <View className="px-6 gap-8">
-            {/* Hero card */}
-            {nextEvent ? (
+            {/* Hero card — shows ALL waste types on the next pickup date */}
+            {nextEvents.length > 0 ? (
               <View>
                 <Text className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
                   {t("nextPickup")}
                 </Text>
-                <View
-                  className="rounded-3xl p-6 overflow-hidden border"
-                  style={{
-                    backgroundColor: WASTE_CONFIG[nextEvent.type].iconBg,
-                    borderColor: "rgba(255,255,255,0.2)",
-                  }}
-                >
-                  <View className="flex-row justify-between items-start">
-                    <View>
-                      <Text
-                        className="text-5xl font-bold tracking-tight"
-                        style={{ color: WASTE_CONFIG[nextEvent.type].color }}
-                      >
-                        {getDaysText(nextEvent.date)}
+
+                {nextEvents.length === 1 ? (
+                  /* ── Single event: original full-colour hero ── */
+                  <View
+                    className="rounded-3xl p-6 overflow-hidden border"
+                    style={{
+                      backgroundColor: WASTE_CONFIG[nextEvents[0].type].iconBg,
+                      borderColor: "rgba(255,255,255,0.2)",
+                    }}
+                  >
+                    <Text
+                      className="text-5xl font-bold tracking-tight"
+                      style={{ color: WASTE_CONFIG[nextEvents[0].type].color }}
+                    >
+                      {getDaysText(nextEvents[0].date)}
+                    </Text>
+                    <Text
+                      className="text-lg font-medium mt-2"
+                      style={{ color: WASTE_CONFIG[nextEvents[0].type].color, opacity: 0.8 }}
+                    >
+                      {format(nextEvents[0].date, "EEEE, d. MMMM", { locale: dateLocale })}
+                    </Text>
+                    <View
+                      className="mt-6 flex-row items-center gap-2 self-start px-4 py-2 rounded-full"
+                      style={{ backgroundColor: "rgba(255,255,255,0.5)" }}
+                    >
+                      {(() => {
+                        const { Icon } = WASTE_CONFIG[nextEvents[0].type];
+                        return <Icon size={20} color={WASTE_CONFIG[nextEvents[0].type].color} />;
+                      })()}
+                      <Text className="font-semibold" style={{ color: WASTE_CONFIG[nextEvents[0].type].color }}>
+                        {t(nextEvents[0].type)}
                       </Text>
-                      <Text
-                        className="text-lg font-medium mt-2"
-                        style={{ color: WASTE_CONFIG[nextEvent.type].color, opacity: 0.8 }}
-                      >
-                        {format(nextEvent.date, "EEEE, d. MMMM", { locale: dateLocale })}
-                      </Text>
-                      <View
-                        className="mt-6 flex-row items-center gap-2 self-start px-4 py-2 rounded-full"
-                        style={{ backgroundColor: "rgba(255,255,255,0.5)" }}
-                      >
-                        {(() => {
-                          const { Icon } = WASTE_CONFIG[nextEvent.type];
-                          return <Icon size={20} color={WASTE_CONFIG[nextEvent.type].color} />;
-                        })()}
-                        <Text className="font-semibold" style={{ color: WASTE_CONFIG[nextEvent.type].color }}>
-                          {t(nextEvent.type)}
-                        </Text>
-                      </View>
                     </View>
                   </View>
-                </View>
+                ) : (
+                  /* ── Multiple events same day: white card + coloured pills ── */
+                  <View
+                    className="rounded-3xl p-6 bg-white border border-gray-100"
+                    style={{ shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 10, elevation: 3 }}
+                  >
+                    <Text className="text-5xl font-bold tracking-tight text-gray-900">
+                      {getDaysText(nextEvents[0].date)}
+                    </Text>
+                    <Text className="text-lg font-medium mt-2 text-gray-500">
+                      {format(nextEvents[0].date, "EEEE, d. MMMM", { locale: dateLocale })}
+                    </Text>
+                    {/* One pill per waste type — all highlighted equally */}
+                    <View className="mt-5 flex-row flex-wrap gap-2">
+                      {nextEvents.map((event) => {
+                        const { Icon, iconBg, color } = WASTE_CONFIG[event.type];
+                        return (
+                          <View
+                            key={event.type}
+                            className="flex-row items-center gap-2 px-4 py-2.5 rounded-full"
+                            style={{ backgroundColor: iconBg }}
+                          >
+                            <Icon size={18} color={color} />
+                            <Text className="font-semibold text-sm" style={{ color }}>
+                              {t(event.type)}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+                )}
               </View>
             ) : (
               <View className="items-center py-12">
