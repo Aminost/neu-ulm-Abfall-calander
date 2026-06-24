@@ -71,13 +71,12 @@ npm install
 npm run dev                # starts on http://localhost:3001
 ```
 
-`.env` keys:
+`.env` keys (defaults are set for the **KIT ki-toolbox**):
 
-- `AI_API_KEY` — your OpenAI / ChatGPT / kit.ai key.
-- `AI_BASE_URL` — leave blank for OpenAI; set to your gateway's OpenAI-compatible
-  URL (e.g. `https://api.kit.ai/v1`) to use kit.ai.
-- `AI_MODEL` — chat/vision model (must support images for scanning, e.g. `gpt-4o`).
-- `AI_EMBED_MODEL` — embedding model for retrieval (e.g. `text-embedding-3-small`).
+- `AI_API_KEY` — your provider key (for KIT, your `OPENAI_API_KEY`).
+- `AI_BASE_URL` — OpenAI-compatible base URL. Default: `https://ki-toolbox.scc.kit.edu/api/v1`. Leave blank to use OpenAI directly.
+- `AI_MODEL` — chat/vision model. Default `openai/azure.gpt-4.1` (supports image input, so scanning works).
+- `AI_EMBED_MODEL` — embedding model for retrieval. **Leave blank if your gateway has no embeddings endpoint** — the server automatically falls back to keyword retrieval, so the chatbot still works (just with simpler ranking).
 
 ### 2. App
 

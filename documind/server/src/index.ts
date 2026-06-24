@@ -55,13 +55,13 @@ app.post(
       res.json({ ok: true, chunks: 0 });
       return;
     }
-    const embeddings = await embedTexts(pieces);
+    const embeddings = await embedTexts(pieces); // null when embeddings disabled/unavailable
     addDocument(
       docId,
       title || "Untitled document",
-      pieces.map((t, i) => ({ text: t, embedding: embeddings[i] })),
+      pieces.map((t, i) => ({ text: t, embedding: embeddings ? embeddings[i] : null })),
     );
-    res.json({ ok: true, chunks: pieces.length });
+    res.json({ ok: true, chunks: pieces.length, embedded: embeddings !== null });
   }),
 );
 
@@ -83,8 +83,9 @@ app.post(
       res.status(400).json({ error: "Provide a question." });
       return;
     }
-    const [queryEmbedding] = await embedTexts([question]);
-    const hits = search(queryEmbedding, 5).filter((h) => h.score > 0.15);
+    const embedded = await embedTexts([question]);
+    const queryEmbedding = embedded ? embedded[0] : null;
+    const hits = search(question, queryEmbedding, 5).filter((h) => h.score > 0.05);
 
     const answer = await answerQuestion(
       question,

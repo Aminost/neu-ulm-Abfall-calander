@@ -1,7 +1,7 @@
-// A tiny JSON-persisted vector store for retrieval-augmented chat. Each
-// document's text is split into overlapping chunks, embedded, and stored.
-// Retrieval is exact cosine similarity over the in-memory array — more than
-// enough for a personal document library.
+// A tiny JSON-persisted store for retrieval-augmented chat. Each document's
+// text is split into overlapping chunks. When the AI gateway provides
+// embeddings, retrieval uses cosine similarity; otherwise it falls back to a
+// keyword-overlap score, so chat works even on a chat-only gateway.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -15,7 +15,7 @@ export interface Chunk {
   docId: string;
   title: string;
   text: string;
-  embedding: number[];
+  embedding: number[] | null;
 }
 
 let chunks: Chunk[] = load();
@@ -44,7 +44,6 @@ export function chunkText(text: string, maxLen = 900, overlap = 150): string[] {
   let i = 0;
   while (i < clean.length) {
     let end = Math.min(i + maxLen, clean.length);
-    // try to break on a paragraph or sentence boundary near the end
     const slice = clean.slice(i, end);
     const breakAt = Math.max(slice.lastIndexOf("\n"), slice.lastIndexOf(". "));
     if (end < clean.length && breakAt > maxLen * 0.5) end = i + breakAt + 1;
@@ -60,10 +59,14 @@ export function removeDocument(docId: string): void {
   persist();
 }
 
-export function addDocument(docId: string, title: string, embedded: { text: string; embedding: number[] }[]): void {
+export function addDocument(
+  docId: string,
+  title: string,
+  pieces: { text: string; embedding: number[] | null }[],
+): void {
   removeDocument(docId); // replace any prior version
-  for (const e of embedded) {
-    chunks.push({ docId, title, text: e.text, embedding: e.embedding });
+  for (const p of pieces) {
+    chunks.push({ docId, title, text: p.text, embedding: p.embedding });
   }
   persist();
 }
@@ -81,13 +84,45 @@ function cosine(a: number[], b: number[]): number {
   return dot / (Math.sqrt(na) * Math.sqrt(nb));
 }
 
+function tokenize(s: string): string[] {
+  return s
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .split(/\s+/)
+    .filter((t) => t.length > 2);
+}
+
+/** Keyword-overlap score in [0,1] — used when embeddings aren't available. */
+function lexicalScore(queryTokens: Set<string>, text: string): number {
+  if (queryTokens.size === 0) return 0;
+  const textTokens = new Set(tokenize(text));
+  let hits = 0;
+  for (const t of queryTokens) if (textTokens.has(t)) hits++;
+  return hits / queryTokens.size;
+}
+
 export interface SearchHit extends Chunk {
   score: number;
 }
 
-export function search(queryEmbedding: number[], k = 5): SearchHit[] {
+/**
+ * Retrieve the top-k chunks. Uses cosine similarity for chunks that have an
+ * embedding (when a query embedding is supplied), and keyword overlap otherwise.
+ */
+export function search(
+  queryText: string,
+  queryEmbedding: number[] | null,
+  k = 5,
+): SearchHit[] {
+  const queryTokens = new Set(tokenize(queryText));
   return chunks
-    .map((c) => ({ ...c, score: cosine(queryEmbedding, c.embedding) }))
+    .map((c) => {
+      const score =
+        queryEmbedding && c.embedding
+          ? cosine(queryEmbedding, c.embedding)
+          : lexicalScore(queryTokens, c.text);
+      return { ...c, score };
+    })
     .sort((a, b) => b.score - a.score)
     .slice(0, k);
 }

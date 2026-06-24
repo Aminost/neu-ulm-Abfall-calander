@@ -11,8 +11,13 @@ import type {
   ChatCompletionMessageParam,
 } from "openai/resources/chat/completions";
 
-export const MODEL = process.env.AI_MODEL || "gpt-4o";
-export const EMBED_MODEL = process.env.AI_EMBED_MODEL || "text-embedding-3-small";
+export const MODEL = process.env.AI_MODEL || "openai/azure.gpt-4.1";
+// Empty string disables embeddings; the server falls back to keyword retrieval.
+export const EMBED_MODEL =
+  process.env.AI_EMBED_MODEL === undefined
+    ? "text-embedding-3-small"
+    : process.env.AI_EMBED_MODEL;
+export const EMBEDDINGS_ENABLED = EMBED_MODEL.trim().length > 0;
 
 const client = new OpenAI({
   apiKey: process.env.AI_API_KEY,
@@ -180,10 +185,22 @@ export async function analyzeDocument(input: AnalyzeInput): Promise<DocAnalysis>
   return normalize(extractJson(raw));
 }
 
-export async function embedTexts(texts: string[]): Promise<number[][]> {
-  if (texts.length === 0) return [];
-  const res = await client.embeddings.create({ model: EMBED_MODEL, input: texts });
-  return res.data.map((d) => d.embedding as number[]);
+/**
+ * Embed texts. Returns null when embeddings are disabled or the provider
+ * rejects the request — callers then fall back to keyword retrieval so RAG
+ * keeps working on chat-only gateways.
+ */
+export async function embedTexts(texts: string[]): Promise<number[][] | null> {
+  if (!EMBEDDINGS_ENABLED || texts.length === 0) return null;
+  try {
+    const res = await client.embeddings.create({ model: EMBED_MODEL, input: texts });
+    return res.data.map((d) => d.embedding as number[]);
+  } catch (err) {
+    console.warn(
+      `Embeddings unavailable (${err instanceof Error ? err.message : err}); falling back to keyword retrieval.`,
+    );
+    return null;
+  }
 }
 
 const CHAT_SYSTEM = `You are DocuMind's assistant. Answer the user's question using ONLY the provided document excerpts.
