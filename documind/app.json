@@ -12,12 +12,14 @@
     },
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.aminost.documind",
       "infoPlist": {
         "NSCameraUsageDescription": "DocuMind uses the camera to scan your documents.",
         "NSPhotoLibraryUsageDescription": "DocuMind imports documents from your photo library."
       }
     },
     "android": {
+      "package": "com.aminost.documind",
       "adaptiveIcon": {
         "backgroundColor": "#F7F6F2"
       },

@@ -69,14 +69,43 @@ is **not available in Expo Go or the web preview** — that is why a plain
 appeared to "not open the camera" on web).
 
 To get the real scanner (auto edge-detection + multi-page + PDF) you need a
-**development build**:
+**development build**. Pick one of the two paths below.
+
+### Path A — Cloud build with EAS (no Android SDK to install) ✅ easiest
+
+`npx expo run:android` fails with *“Failed to resolve the Android SDK path / 'adb'
+is not recognized”* when you don't have Android Studio installed. EAS builds the
+dev client in the cloud instead, so you never install the Android SDK locally:
 
 ```bash
-npx expo install expo-print expo-sharing
-npm install react-native-document-scanner-plugin
-npx expo prebuild                 # generates native android/ ios projects
-npx expo run:android              # or: npx expo run:ios  (needs Android Studio / Xcode)
+npm install -g eas-cli
+eas login                                   # free Expo account
+eas build --profile development --platform android
 ```
+
+When it finishes, EAS gives you a QR code / link — install that **.apk** on your
+Android phone. Then run the JS bundle and open it in that app:
+
+```bash
+npx expo start --dev-client
+```
+
+(An `eas.json` with a `development` profile is already included.)
+
+### Path B — Local build (requires Android Studio)
+
+Install **Android Studio**, then set the SDK location so `adb` and the build
+tools are found:
+
+```powershell
+# Windows (PowerShell) — adjust the path to your SDK
+setx ANDROID_HOME "$env:LOCALAPPDATA\Android\Sdk"
+setx PATH "$env:PATH;$env:LOCALAPPDATA\Android\Sdk\platform-tools"
+# open a NEW terminal so the vars take effect, then:
+npx expo run:android
+```
+
+For iOS you need a Mac with Xcode (`npx expo run:ios`).
 
 In that dev build, **Scan document** opens the native scanner: line up the page,
 the edges are detected automatically, add more pages, then finish — DocuMind
