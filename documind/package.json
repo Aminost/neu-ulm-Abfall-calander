@@ -38,6 +38,7 @@
   "devDependencies": {
     "@babel/core": "^7.24.0",
     "@types/react": "^19.1.1",
+    "babel-preset-expo": "~55.0.0",
     "typescript": "~5.9.0"
   }
 }
