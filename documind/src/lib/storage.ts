@@ -23,10 +23,9 @@ async function ensureDir() {
 }
 
 /** Copy a transient capture/import into permanent app storage. Returns the new uri. */
-export async function persistImage(sourceUri: string, id: string): Promise<string> {
+export async function persistFile(sourceUri: string, id: string, ext: string): Promise<string> {
   try {
     await ensureDir();
-    const ext = sourceUri.split(".").pop()?.split("?")[0] || "jpg";
     const dest = `${IMAGE_DIR}${id}.${ext}`;
     await FileSystem.copyAsync({ from: sourceUri, to: dest });
     return dest;
@@ -34,6 +33,11 @@ export async function persistImage(sourceUri: string, id: string): Promise<strin
     // Fall back to the original uri if copying fails (e.g. web).
     return sourceUri;
   }
+}
+
+export async function persistImage(sourceUri: string, id: string): Promise<string> {
+  const ext = sourceUri.split(".").pop()?.split("?")[0] || "jpg";
+  return persistFile(sourceUri, id, ext);
 }
 
 export async function listDocuments(): Promise<DocumentRecord[]> {
@@ -67,11 +71,13 @@ export async function saveDocument(doc: DocumentRecord): Promise<void> {
 export async function deleteDocument(id: string): Promise<void> {
   const docs = await listDocuments();
   const doc = docs.find((d) => d.id === id);
-  if (doc?.imageUri && doc.imageUri.startsWith(IMAGE_DIR)) {
-    try {
-      await FileSystem.deleteAsync(doc.imageUri, { idempotent: true });
-    } catch {
-      /* ignore */
+  for (const uri of [doc?.imageUri, doc?.pdfUri]) {
+    if (uri && uri.startsWith(IMAGE_DIR)) {
+      try {
+        await FileSystem.deleteAsync(uri, { idempotent: true });
+      } catch {
+        /* ignore */
+      }
     }
   }
   await writeAll(docs.filter((d) => d.id !== id));

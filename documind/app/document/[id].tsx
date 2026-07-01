@@ -1,4 +1,5 @@
 import React from "react";
+import * as Sharing from "expo-sharing";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   ArrowLeft,
@@ -6,6 +7,7 @@ import {
   ChevronDown,
   ChevronUp,
   CreditCard,
+  FileDown,
   Flag,
   Trash2,
   Zap,
@@ -51,6 +53,19 @@ export default function DocumentDetail() {
   useEffect(() => {
     if (id) getDocument(id).then(setDoc);
   }, [id]);
+
+  async function openPdf() {
+    if (!doc?.pdfUri) return;
+    try {
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(doc.pdfUri, { mimeType: "application/pdf", UTI: "com.adobe.pdf" });
+      } else {
+        Alert.alert("Sharing unavailable", "PDF sharing isn't supported on this platform.");
+      }
+    } catch (e) {
+      Alert.alert("Couldn't open PDF", e instanceof Error ? e.message : String(e));
+    }
+  }
 
   function confirmDelete() {
     Alert.alert("Delete document", "This removes it from your device and the chat index.", [
@@ -103,8 +118,19 @@ export default function DocumentDetail() {
         <View style={styles.metaRow}>
           <Pill label={analysis.category || "Other"} />
           {analysis.language ? <Pill label={analysis.language} /> : null}
+          {doc.pageCount ? <Pill label={`${doc.pageCount} page${doc.pageCount > 1 ? "s" : ""}`} /> : null}
           <Text style={styles.date}>{new Date(doc.createdAt).toLocaleDateString()}</Text>
         </View>
+
+        {doc.pdfUri ? (
+          <Pressable
+            onPress={openPdf}
+            style={({ pressed }) => [styles.pdfBtn, pressed && { opacity: 0.9 }]}
+          >
+            <FileDown color={colors.accent} size={18} />
+            <Text style={styles.pdfBtnText}>Open / share PDF</Text>
+          </Pressable>
+        ) : null}
 
         {analysis.summary ? (
           <Card style={{ marginTop: spacing.md }}>
@@ -214,6 +240,20 @@ const styles = StyleSheet.create({
   title: { fontSize: font.h1, fontWeight: "800", color: colors.text, lineHeight: 34 },
   metaRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, flexWrap: "wrap" },
   date: { fontSize: font.small, color: colors.textFaint },
+  pdfBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    alignSelf: "flex-start",
+    marginTop: spacing.md,
+    backgroundColor: colors.accentSoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  pdfBtnText: { fontSize: font.small, fontWeight: "700", color: colors.accent },
   sectionLabel: {
     fontSize: font.tiny,
     fontWeight: "700",

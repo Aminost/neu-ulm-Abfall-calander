@@ -1,9 +1,8 @@
 import React from "react";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
-import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
-import { Camera, FileUp, ImagePlus, Sparkles } from "lucide-react-native";
+import { Camera, FileText, FileUp, ImagePlus, Info, ScanLine } from "lucide-react-native";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -17,16 +16,24 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Card, ScreenTitle } from "../../src/components/ui";
-import { analyzeImage, analyzeText, indexDocument } from "../../src/api/client";
-import { newId, persistImage, saveDocument } from "../../src/lib/storage";
+import { analyzeImage, analyzeImages, analyzeText, indexDocument } from "../../src/api/client";
+import { newId, persistFile, saveDocument } from "../../src/lib/storage";
+import {
+  imagesToPdf,
+  nativeScannerAvailable,
+  pickFromLibrary,
+  readBase64,
+  scanDocument,
+} from "../../src/lib/scanner";
 import { colors, font, radius, spacing } from "../../src/lib/theme";
 import type { DocAnalysis } from "../../src/lib/types";
 
-type Stage = "idle" | "reading" | "analyzing";
+type Stage = "idle" | "scanning" | "building" | "analyzing";
 
 const STAGE_TEXT: Record<Exclude<Stage, "idle">, string> = {
-  reading: "Reading the document…",
-  analyzing: "Understanding content, sorting & flagging…",
+  scanning: "Detecting document edges…",
+  building: "Building PDF…",
+  analyzing: "Reading, sorting & flagging…",
 };
 
 export default function ScanScreen() {
@@ -34,72 +41,92 @@ export default function ScanScreen() {
   const [stage, setStage] = useState<Stage>("idle");
   const [preview, setPreview] = useState<string | null>(null);
 
-  async function finish(analysis: DocAnalysis, imageUri?: string) {
+  async function finish(
+    analysis: DocAnalysis,
+    thumbUri?: string,
+    pdfUri?: string,
+    pageCount?: number,
+  ) {
     const id = newId();
-    const storedUri = imageUri ? await persistImage(imageUri, id) : undefined;
+    const storedImg = thumbUri ? await persistFile(thumbUri, id, "jpg") : undefined;
+    const storedPdf = pdfUri ? await persistFile(pdfUri, id, "pdf") : undefined;
     await saveDocument({
       id,
       createdAt: Date.now(),
-      imageUri: storedUri,
+      imageUri: storedImg,
+      pdfUri: storedPdf,
+      pageCount,
       status: "ready",
       analysis,
     });
-    // Index for RAG chat — non-fatal if it fails.
     indexDocument(id, analysis.title, analysis.fullText).catch(() => {});
-    setStage("idle");
-    setPreview(null);
+    reset();
     router.push(`/document/${id}`);
   }
 
-  function fail(e: unknown) {
+  function reset() {
     setStage("idle");
     setPreview(null);
+  }
+
+  function fail(e: unknown) {
+    reset();
     Alert.alert("Couldn't process document", e instanceof Error ? e.message : String(e));
   }
 
-  async function handleImage(uri: string, base64?: string, mime = "image/jpeg") {
+  // Shared pipeline for scanned / imported page images: PDF → analyze → save.
+  async function processImages(imageUris: string[]) {
     try {
-      setPreview(uri);
+      if (imageUris.length === 0) {
+        reset();
+        return;
+      }
+      setPreview(imageUris[0]);
+
+      setStage("building");
+      let pdfUri: string | undefined;
+      try {
+        pdfUri = await imagesToPdf(imageUris);
+      } catch {
+        // PDF is a bonus; continue even if generation isn't available (e.g. web).
+      }
+
       setStage("analyzing");
-      const data =
-        base64 ?? (await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 }));
-      const analysis = await analyzeImage(data, mime);
-      await finish(analysis, uri);
+      const pages = await Promise.all(imageUris.map(readBase64));
+      const analysis = await analyzeImages(pages);
+      await finish(analysis, imageUris[0], pdfUri, imageUris.length);
     } catch (e) {
       fail(e);
     }
   }
 
-  async function takePhoto() {
-    const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert("Camera permission needed", "Enable camera access to scan documents.");
-      return;
+  async function onScan() {
+    try {
+      setStage("scanning");
+      const result = await scanDocument();
+      if (!result) {
+        reset();
+        return;
+      }
+      await processImages(result.imageUris);
+    } catch (e) {
+      fail(e);
     }
-    const res = await ImagePicker.launchCameraAsync({
-      base64: true,
-      quality: 0.7,
-      allowsEditing: true,
-    });
-    if (res.canceled) return;
-    const a = res.assets[0];
-    await handleImage(a.uri, a.base64 ?? undefined, a.mimeType ?? "image/jpeg");
   }
 
-  async function importImage() {
-    const res = await ImagePicker.launchImageLibraryAsync({
-      base64: true,
-      quality: 0.7,
-      mediaTypes: ["images"],
-    });
-    if (res.canceled) return;
-    const a = res.assets[0];
-    await handleImage(a.uri, a.base64 ?? undefined, a.mimeType ?? "image/jpeg");
+  async function onImportImage() {
+    try {
+      const result = await pickFromLibrary();
+      if (!result) return;
+      await processImages(result.imageUris);
+    } catch (e) {
+      fail(e);
+    }
   }
 
-  async function importFile() {
+  async function onImportFile() {
     const res = await DocumentPicker.getDocumentAsync({
-      type: ["image/*", "text/*", "application/pdf"],
+      type: ["application/pdf", "text/*", "image/*"],
       copyToCacheDirectory: true,
     });
     if (res.canceled) return;
@@ -107,21 +134,22 @@ export default function ScanScreen() {
     const mime = file.mimeType ?? "";
     try {
       if (mime.startsWith("image/")) {
-        await handleImage(file.uri, undefined, mime);
-      } else if (mime.startsWith("text/")) {
-        setStage("reading");
-        const text = await FileSystem.readAsStringAsync(file.uri);
+        await processImages([file.uri]);
+      } else if (mime === "application/pdf") {
         setStage("analyzing");
+        setPreview(null);
+        const data = await FileSystem.readAsStringAsync(file.uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        const analysis = await analyzeImage(data, "application/pdf");
+        await finish(analysis, undefined, file.uri, undefined);
+      } else if (mime.startsWith("text/")) {
+        setStage("analyzing");
+        const text = await FileSystem.readAsStringAsync(file.uri);
         const analysis = await analyzeText(text);
         await finish(analysis);
-      } else if (mime === "application/pdf") {
-        setStage("reading");
-        const data = await FileSystem.readAsStringAsync(file.uri, { encoding: FileSystem.EncodingType.Base64 });
-        setStage("analyzing");
-        const analysis = await analyzeImage(data, "application/pdf");
-        await finish(analysis);
       } else {
-        Alert.alert("Unsupported file", "Pick an image, PDF, or text file.");
+        Alert.alert("Unsupported file", "Pick a PDF, image, or text file.");
       }
     } catch (e) {
       fail(e);
@@ -135,7 +163,7 @@ export default function ScanScreen() {
       <ScrollView contentContainerStyle={styles.scroll}>
         <ScreenTitle
           title="Scan"
-          subtitle="Capture or import a document. One AI pass reads it, classifies it, and flags what matters."
+          subtitle="Point at any document — DocuMind auto-detects the page, saves a PDF, then reads and flags it."
         />
 
         {busy ? (
@@ -144,41 +172,60 @@ export default function ScanScreen() {
               <Image source={{ uri: preview }} style={styles.previewImg} resizeMode="cover" />
             ) : (
               <View style={[styles.previewImg, styles.previewPlaceholder]}>
-                <FileUp color={colors.textFaint} size={36} />
+                <FileText color={colors.textFaint} size={36} />
               </View>
             )}
             <ActivityIndicator color={colors.accent} style={{ marginTop: spacing.lg }} />
-            <Text style={styles.processingText}>{STAGE_TEXT[stage as Exclude<Stage, "idle">]}</Text>
+            <Text style={styles.processingText}>
+              {STAGE_TEXT[stage as Exclude<Stage, "idle">]}
+            </Text>
           </Card>
         ) : (
           <>
-            <Action
-              icon={<Camera color={colors.accent} size={24} />}
-              title="Scan with camera"
-              subtitle="Photograph a paper document"
-              onPress={takePhoto}
-            />
+            <Pressable onPress={onScan} style={({ pressed }) => pressed && { opacity: 0.9 }}>
+              <Card style={styles.primary}>
+                <View style={styles.primaryIcon}>
+                  <ScanLine color={colors.white} size={28} />
+                </View>
+                <Text style={styles.primaryTitle}>Scan document</Text>
+                <Text style={styles.primarySub}>
+                  Auto edge-detection · multi-page · saved as PDF
+                </Text>
+              </Card>
+            </Pressable>
+
             <Action
               icon={<ImagePlus color={colors.accent} size={24} />}
               title="Import image"
-              subtitle="Choose a photo from your library"
-              onPress={importImage}
+              subtitle="Pick photos from your library (multi-select)"
+              onPress={onImportImage}
             />
             <Action
               icon={<FileUp color={colors.accent} size={24} />}
               title="Import file"
               subtitle="PDF or text document"
-              onPress={importFile}
+              onPress={onImportFile}
             />
 
-            <Card style={styles.note}>
-              <Sparkles color={colors.accent} size={18} />
-              <Text style={styles.noteText}>
-                DocuMind uses a vision model to read each page directly — no separate OCR step.
-                It extracts the text, picks a topic, and highlights deadlines, payments and
-                critical issues automatically.
-              </Text>
-            </Card>
+            {!nativeScannerAvailable() && (
+              <Card style={styles.note}>
+                <Info color={colors.accent} size={18} />
+                <Text style={styles.noteText}>
+                  The auto-detecting scanner needs a development build (it's a native module and
+                  isn't in Expo Go or the web preview). Until then, “Scan document” falls back to
+                  your camera. See the README → “Document scanner” to enable it.
+                </Text>
+              </Card>
+            )}
+            {nativeScannerAvailable() && (
+              <Card style={styles.note}>
+                <Camera color={colors.accent} size={18} />
+                <Text style={styles.noteText}>
+                  Line the document up in the scanner — edges are detected automatically. Add more
+                  pages before finishing to build a multi-page PDF.
+                </Text>
+              </Card>
+            )}
           </>
         )}
       </ScrollView>
@@ -213,6 +260,18 @@ function Action({
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   scroll: { padding: spacing.lg, gap: spacing.md },
+  primary: { alignItems: "center", gap: 6, backgroundColor: colors.accent, paddingVertical: spacing.xl },
+  primaryIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.xs,
+  },
+  primaryTitle: { fontSize: font.h2, fontWeight: "800", color: colors.white },
+  primarySub: { fontSize: font.small, color: "rgba(255,255,255,0.85)" },
   action: { flexDirection: "row", alignItems: "center", gap: spacing.lg },
   actionIcon: {
     width: 52,

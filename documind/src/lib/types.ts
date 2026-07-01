@@ -46,8 +46,12 @@ export type DocStatus = "processing" | "ready" | "error";
 export interface DocumentRecord {
   id: string;
   createdAt: number;
-  /** Local file:// URI of the captured/imported page image, when present. */
+  /** Local file:// URI of the first page image (thumbnail), when present. */
   imageUri?: string;
+  /** Local file:// URI of the generated/imported PDF, when present. */
+  pdfUri?: string;
+  /** Number of scanned pages. */
+  pageCount?: number;
   fileName?: string;
   status: DocStatus;
   error?: string;

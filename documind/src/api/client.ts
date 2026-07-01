@@ -48,6 +48,18 @@ export async function analyzeImage(
   return analysis;
 }
 
+/** Analyze a multi-page document — every page image is sent in one vision call. */
+export async function analyzeImages(
+  imagesBase64: string[],
+  mimeType = "image/jpeg",
+): Promise<DocAnalysis> {
+  const { analysis } = await request<{ analysis: DocAnalysis }>("/api/analyze", {
+    imagesBase64,
+    mimeType,
+  });
+  return analysis;
+}
+
 /** Analyze raw text (used for PDF/text imports where we already have text). */
 export async function analyzeText(text: string): Promise<DocAnalysis> {
   const { analysis } = await request<{ analysis: DocAnalysis }>("/api/analyze", {

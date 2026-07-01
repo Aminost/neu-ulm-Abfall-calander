@@ -40,7 +40,8 @@
         {
           "photosPermission": "DocuMind imports documents from your photo library."
         }
-      ]
+      ],
+      "react-native-document-scanner-plugin"
     ],
     "extra": {
       "router": {}

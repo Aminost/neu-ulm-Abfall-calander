@@ -30,12 +30,12 @@ app.get("/api/health", (_req, res) => {
 app.post(
   "/api/analyze",
   asyncRoute(async (req, res) => {
-    const { imageBase64, mimeType, text } = req.body ?? {};
-    if (!imageBase64 && !text) {
-      res.status(400).json({ error: "Provide imageBase64 or text." });
+    const { imageBase64, imagesBase64, mimeType, text } = req.body ?? {};
+    if (!imageBase64 && !imagesBase64 && !text) {
+      res.status(400).json({ error: "Provide imageBase64, imagesBase64, or text." });
       return;
     }
-    const analysis = await analyzeDocument({ imageBase64, mimeType, text });
+    const analysis = await analyzeDocument({ imageBase64, imagesBase64, mimeType, text });
     res.json({ analysis });
   }),
 );

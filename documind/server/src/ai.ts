@@ -98,31 +98,48 @@ Use the word JSON only as data. If a field has no data, return an empty string o
 
 export interface AnalyzeInput {
   imageBase64?: string;
+  /** Multiple page images — analyzed together as one document. */
+  imagesBase64?: string[];
   mimeType?: string;
   text?: string;
 }
 
 function userContent(input: AnalyzeInput): ChatCompletionContentPart[] {
-  const instruction = { type: "text" as const, text: "Analyze this document and return the JSON described." };
+  const instruction = {
+    type: "text" as const,
+    text: "Analyze this document (all pages together) and return the JSON described.",
+  };
   if (input.text) {
     return [
       { type: "text" as const, text: "Document text follows:\n\n" + input.text },
       instruction,
     ];
   }
+
   const mime = input.mimeType || "image/jpeg";
-  const dataUri = `data:${mime};base64,${input.imageBase64}`;
-  if (mime === "application/pdf") {
-    // Chat Completions file input (supported by gpt-4o family).
+  const images =
+    input.imagesBase64 && input.imagesBase64.length > 0
+      ? input.imagesBase64
+      : input.imageBase64
+        ? [input.imageBase64]
+        : [];
+
+  if (mime === "application/pdf" && images.length > 0) {
+    // Chat Completions file input (supported by gpt-4o / gpt-4.1 family).
     return [
-      { type: "file" as any, file: { filename: "document.pdf", file_data: dataUri } } as any,
+      {
+        type: "file" as any,
+        file: { filename: "document.pdf", file_data: `data:${mime};base64,${images[0]}` },
+      } as any,
       instruction,
     ];
   }
-  return [
-    { type: "image_url" as const, image_url: { url: dataUri } },
-    instruction,
-  ];
+
+  const parts: ChatCompletionContentPart[] = images.map((b64) => ({
+    type: "image_url" as const,
+    image_url: { url: `data:${mime};base64,${b64}` },
+  }));
+  return [...parts, instruction];
 }
 
 function extractJson(raw: string): any {

@@ -15,7 +15,7 @@ a knowledge graph.
 
 | Feature | How |
 | --- | --- |
-| **Scan / upload** | Camera capture, photo import, or file import (image / PDF / text). |
+| **Scan / upload** | A real document scanner with **automatic edge-detection**, multi-page capture, and **PDF output**; plus photo import and file import (image / PDF / text). |
 | **OCR — the modern way** | No separate OCR engine. The page image is sent straight to a **vision model**, which transcribes the text *and* understands it in one pass. |
 | **Classification** | Each document is sorted into a topic (Finance, Legal, Medical, Insurance, …). |
 | **Highlights** | Deadlines, payments, critical problems and required actions are extracted and flagged with a severity. |
@@ -59,6 +59,38 @@ OpenAI-compatible protocol, so it works against OpenAI/ChatGPT directly or any
 compatible gateway (point `AI_BASE_URL` at your kit.ai endpoint).
 
 ---
+
+## Document scanner (important)
+
+The auto-detecting scanner uses **`react-native-document-scanner-plugin`**
+(Google ML Kit on Android, VisionKit on iOS). It's a **native module**, so it
+is **not available in Expo Go or the web preview** — that is why a plain
+`expo start` + Expo Go shows only the camera fallback (and why the old build
+appeared to "not open the camera" on web).
+
+To get the real scanner (auto edge-detection + multi-page + PDF) you need a
+**development build**:
+
+```bash
+npx expo install expo-print expo-sharing
+npm install react-native-document-scanner-plugin
+npx expo prebuild                 # generates native android/ ios projects
+npx expo run:android              # or: npx expo run:ios  (needs Android Studio / Xcode)
+```
+
+In that dev build, **Scan document** opens the native scanner: line up the page,
+the edges are detected automatically, add more pages, then finish — DocuMind
+stitches them into a PDF and analyzes them. In Expo Go / web it falls back to
+the system camera so the button still works (no auto-crop, single page).
+
+> Tip: `npx expo install …` picks the versions that match your Expo SDK — prefer
+> it over the pinned versions in `package.json` if `npm install` warns about
+> mismatches.
+>
+> If `expo prebuild` complains that `react-native-document-scanner-plugin` has no
+> config plugin (older versions), remove the `"react-native-document-scanner-plugin"`
+> line from `app.json` → `plugins` and add the camera permission manually — the
+> module still autolinks.
 
 ## Getting started
 
