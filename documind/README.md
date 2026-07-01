@@ -62,14 +62,20 @@ compatible gateway (point `AI_BASE_URL` at your kit.ai endpoint).
 
 ## Document scanner (important)
 
-The auto-detecting scanner uses **`react-native-document-scanner-plugin`**
-(Google ML Kit on Android, VisionKit on iOS). It's a **native module**, so it
-is **not available in Expo Go or the web preview** — that is why a plain
-`expo start` + Expo Go shows only the camera fallback (and why the old build
-appeared to "not open the camera" on web).
+There are two layers here:
 
-To get the real scanner (auto edge-detection + multi-page + PDF) you need a
-**development build**. Pick one of the two paths below.
+- **The live camera** (capture pages, multi-shot) uses **`expo-camera`** and
+  works **everywhere** — Expo Go and the web browser included. This is the
+  default “Scan document” behavior. (The old build used the OS image-picker,
+  which on web only opened a file-upload dialog — that's now fixed.)
+- **Automatic edge-detection + PDF export** use **`react-native-document-scanner-plugin`**
+  and **`expo-print`**, which are **native modules** — not present in Expo Go or
+  on web. To get those you need a **development build** (below). Without it, the
+  camera still captures pages and the document is still read and classified; you
+  just don't get auto-crop or a saved PDF.
+
+To enable the full scanner (auto edge-detection + PDF), pick one of the two
+paths below.
 
 ### Path A — Cloud build with EAS (no Android SDK to install) ✅ easiest
 

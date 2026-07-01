@@ -1,6 +1,5 @@
 import React from "react";
 import * as DocumentPicker from "expo-document-picker";
-import * as FileSystem from "expo-file-system/legacy";
 import { useRouter } from "expo-router";
 import { Camera, FileText, FileUp, ImagePlus, Info, ScanLine } from "lucide-react-native";
 import { useState } from "react";
@@ -15,15 +14,18 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { CameraModal } from "../../src/components/CameraModal";
 import { Card, ScreenTitle } from "../../src/components/ui";
 import { analyzeImage, analyzeImages, analyzeText, indexDocument } from "../../src/api/client";
 import { newId, persistFile, saveDocument } from "../../src/lib/storage";
 import {
   imagesToPdf,
   nativeScannerAvailable,
-  pickFromLibrary,
-  readBase64,
-  scanDocument,
+  pickImagesFromLibrary,
+  scanWithNativeScanner,
+  uriToBase64,
+  uriToText,
+  type Page,
 } from "../../src/lib/scanner";
 import { colors, font, radius, spacing } from "../../src/lib/theme";
 import type { DocAnalysis } from "../../src/lib/types";
@@ -40,6 +42,17 @@ export default function ScanScreen() {
   const router = useRouter();
   const [stage, setStage] = useState<Stage>("idle");
   const [preview, setPreview] = useState<string | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
+
+  function reset() {
+    setStage("idle");
+    setPreview(null);
+  }
+
+  function fail(e: unknown) {
+    reset();
+    Alert.alert("Couldn't process document", e instanceof Error ? e.message : String(e));
+  }
 
   async function finish(
     analysis: DocAnalysis,
@@ -64,61 +77,59 @@ export default function ScanScreen() {
     router.push(`/document/${id}`);
   }
 
-  function reset() {
-    setStage("idle");
-    setPreview(null);
-  }
-
-  function fail(e: unknown) {
-    reset();
-    Alert.alert("Couldn't process document", e instanceof Error ? e.message : String(e));
-  }
-
-  // Shared pipeline for scanned / imported page images: PDF → analyze → save.
-  async function processImages(imageUris: string[]) {
+  // Shared pipeline for captured / imported page images.
+  async function runPipeline(pages: Page[]) {
     try {
-      if (imageUris.length === 0) {
+      if (pages.length === 0) {
         reset();
         return;
       }
-      setPreview(imageUris[0]);
+      setPreview(pages[0].uri);
 
       setStage("building");
       let pdfUri: string | undefined;
       try {
-        pdfUri = await imagesToPdf(imageUris);
+        pdfUri = await imagesToPdf(pages.map((p) => p.base64));
       } catch {
-        // PDF is a bonus; continue even if generation isn't available (e.g. web).
+        // PDF is a bonus (unavailable on web) — carry on.
       }
 
       setStage("analyzing");
-      const pages = await Promise.all(imageUris.map(readBase64));
-      const analysis = await analyzeImages(pages);
-      await finish(analysis, imageUris[0], pdfUri, imageUris.length);
+      const analysis = await analyzeImages(pages.map((p) => p.base64));
+      await finish(analysis, pages[0].uri, pdfUri, pages.length);
     } catch (e) {
       fail(e);
     }
   }
 
-  async function onScan() {
-    try {
-      setStage("scanning");
-      const result = await scanDocument();
-      if (!result) {
-        reset();
-        return;
+  async function onScanPress() {
+    // Prefer the auto-detecting native scanner when a dev build provides it;
+    // otherwise open the live camera (works in Expo Go and the browser).
+    if (nativeScannerAvailable()) {
+      try {
+        setStage("scanning");
+        const uris = await scanWithNativeScanner();
+        if (!uris) {
+          reset();
+          return;
+        }
+        const pages = await Promise.all(
+          uris.map(async (uri) => ({ uri, base64: await uriToBase64(uri) })),
+        );
+        await runPipeline(pages);
+      } catch (e) {
+        fail(e);
       }
-      await processImages(result.imageUris);
-    } catch (e) {
-      fail(e);
+    } else {
+      setCameraOpen(true);
     }
   }
 
   async function onImportImage() {
     try {
-      const result = await pickFromLibrary();
-      if (!result) return;
-      await processImages(result.imageUris);
+      const pages = await pickImagesFromLibrary();
+      if (!pages) return;
+      await runPipeline(pages);
     } catch (e) {
       fail(e);
     }
@@ -134,18 +145,16 @@ export default function ScanScreen() {
     const mime = file.mimeType ?? "";
     try {
       if (mime.startsWith("image/")) {
-        await processImages([file.uri]);
+        const base64 = await uriToBase64(file.uri);
+        await runPipeline([{ uri: file.uri, base64 }]);
       } else if (mime === "application/pdf") {
         setStage("analyzing");
-        setPreview(null);
-        const data = await FileSystem.readAsStringAsync(file.uri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
+        const data = await uriToBase64(file.uri);
         const analysis = await analyzeImage(data, "application/pdf");
         await finish(analysis, undefined, file.uri, undefined);
       } else if (mime.startsWith("text/")) {
         setStage("analyzing");
-        const text = await FileSystem.readAsStringAsync(file.uri);
+        const text = await uriToText(file.uri);
         const analysis = await analyzeText(text);
         await finish(analysis);
       } else {
@@ -160,10 +169,19 @@ export default function ScanScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
+      <CameraModal
+        visible={cameraOpen}
+        onClose={() => setCameraOpen(false)}
+        onDone={(pages) => {
+          setCameraOpen(false);
+          runPipeline(pages);
+        }}
+      />
+
       <ScrollView contentContainerStyle={styles.scroll}>
         <ScreenTitle
           title="Scan"
-          subtitle="Point at any document — DocuMind auto-detects the page, saves a PDF, then reads and flags it."
+          subtitle="Point at any document — DocuMind reads it, flags what matters, and (on device) saves a PDF."
         />
 
         {busy ? (
@@ -182,14 +200,16 @@ export default function ScanScreen() {
           </Card>
         ) : (
           <>
-            <Pressable onPress={onScan} style={({ pressed }) => pressed && { opacity: 0.9 }}>
+            <Pressable onPress={onScanPress} style={({ pressed }) => pressed && { opacity: 0.9 }}>
               <Card style={styles.primary}>
                 <View style={styles.primaryIcon}>
                   <ScanLine color={colors.white} size={28} />
                 </View>
                 <Text style={styles.primaryTitle}>Scan document</Text>
                 <Text style={styles.primarySub}>
-                  Auto edge-detection · multi-page · saved as PDF
+                  {nativeScannerAvailable()
+                    ? "Auto edge-detection · multi-page · PDF"
+                    : "Live camera · multi-page capture"}
                 </Text>
               </Card>
             </Pressable>
@@ -207,25 +227,18 @@ export default function ScanScreen() {
               onPress={onImportFile}
             />
 
-            {!nativeScannerAvailable() && (
-              <Card style={styles.note}>
-                <Info color={colors.accent} size={18} />
-                <Text style={styles.noteText}>
-                  The auto-detecting scanner needs a development build (it's a native module and
-                  isn't in Expo Go or the web preview). Until then, “Scan document” falls back to
-                  your camera. See the README → “Document scanner” to enable it.
-                </Text>
-              </Card>
-            )}
-            {nativeScannerAvailable() && (
-              <Card style={styles.note}>
+            <Card style={styles.note}>
+              {nativeScannerAvailable() ? (
                 <Camera color={colors.accent} size={18} />
-                <Text style={styles.noteText}>
-                  Line the document up in the scanner — edges are detected automatically. Add more
-                  pages before finishing to build a multi-page PDF.
-                </Text>
-              </Card>
-            )}
+              ) : (
+                <Info color={colors.accent} size={18} />
+              )}
+              <Text style={styles.noteText}>
+                {nativeScannerAvailable()
+                  ? "The scanner detects page edges automatically — add several pages to build a multi-page PDF."
+                  : "Running in Expo Go / the browser: “Scan document” opens the live camera. Automatic edge-detection and PDF export need a development build (see README → Document scanner)."}
+              </Text>
+            </Card>
           </>
         )}
       </ScrollView>
