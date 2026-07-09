@@ -17,6 +17,7 @@ import {
   saveSettings,
   writeBase64File,
 } from "../../src/lib/storage";
+import { exportLibrary, importLibrary } from "../../src/lib/backup";
 import { rescheduleAll, scheduleDeadlineReminders } from "../../src/lib/notifications";
 import { sampleDocuments } from "../../src/lib/sampleData";
 import { listDocuments } from "../../src/lib/storage";
@@ -42,6 +43,34 @@ export default function SettingsScreen() {
     setRemindPay(v);
     await saveSettings({ apiUrl: apiUrl.trim(), reminderDaysBefore: reminderDays, remindPayments: v });
   }
+  const [busyBackup, setBusyBackup] = useState<"export" | "import" | null>(null);
+
+  async function doExport() {
+    setBusyBackup("export");
+    try {
+      const r = await exportLibrary();
+      if (r === "empty") Alert.alert("Nothing to export", "Your library is empty.");
+    } catch (e) {
+      Alert.alert("Export failed", e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusyBackup(null);
+    }
+  }
+  async function doImport() {
+    setBusyBackup("import");
+    try {
+      const added = await importLibrary();
+      Alert.alert(
+        "Import complete",
+        added > 0 ? `Added ${added} document${added === 1 ? "" : "s"}.` : "No new documents to add.",
+      );
+    } catch (e) {
+      Alert.alert("Import failed", e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusyBackup(null);
+    }
+  }
+
   async function reschedule() {
     setRescheduling(true);
     try {
@@ -257,6 +286,25 @@ export default function SettingsScreen() {
             variant="secondary"
             loading={restoring}
           />
+          <Text style={styles.hint}>Or keep a portable backup file you control:</Text>
+          <View style={styles.backupRow}>
+            <View style={{ flex: 1 }}>
+              <Button
+                label="Export"
+                onPress={doExport}
+                variant="secondary"
+                loading={busyBackup === "export"}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button
+                label="Import"
+                onPress={doImport}
+                variant="secondary"
+                loading={busyBackup === "import"}
+              />
+            </View>
+          </View>
         </Card>
 
         <Card style={{ marginTop: spacing.md, gap: spacing.md }}>
@@ -330,6 +378,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   dayChipActive: { backgroundColor: colors.accent, borderColor: colors.accent, color: colors.white },
+  backupRow: { flexDirection: "row", gap: spacing.md },
   switchRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   switchLabel: { fontSize: font.body, color: colors.text, flex: 1 },
   aboutTitle: { fontSize: font.h3, fontWeight: "700", color: colors.text, marginBottom: spacing.sm },
