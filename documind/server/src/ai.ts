@@ -160,6 +160,41 @@ function extractJson(raw: string): any {
   return JSON.parse(cleaned.slice(start, end + 1));
 }
 
+/**
+ * Normalize a model-provided date to ISO (YYYY-MM-DD). Accepts the ISO form as
+ * well as the common European/German formats real documents use
+ * (DD.MM.YYYY, DD/MM/YYYY, DD-MM-YYYY) and YYYY/MM/DD. Returns undefined if it
+ * can't confidently parse — so a bad string never becomes a wrong reminder.
+ */
+export function toIsoDate(v: unknown): string | undefined {
+  if (typeof v !== "string") return undefined;
+  const s = v.trim();
+  if (!s) return undefined;
+
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return s;
+
+  // DD.MM.YYYY / DD/MM/YYYY / DD-MM-YYYY (European day-first)
+  let m = s.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})$/);
+  if (m) {
+    const day = +m[1];
+    const mon = +m[2];
+    if (day >= 1 && day <= 31 && mon >= 1 && mon <= 12) {
+      return `${m[3]}-${String(mon).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    }
+  }
+  // YYYY/MM/DD or YYYY.MM.DD
+  m = s.match(/^(\d{4})[.\/](\d{1,2})[.\/](\d{1,2})$/);
+  if (m) {
+    const mon = +m[2];
+    const day = +m[3];
+    if (day >= 1 && day <= 31 && mon >= 1 && mon <= 12) {
+      return `${m[1]}-${String(mon).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    }
+  }
+  return undefined;
+}
+
 let highlightCounter = 0;
 function normalize(parsed: any): DocAnalysis {
   const arr = (v: any): any[] => (Array.isArray(v) ? v : []);
@@ -172,7 +207,7 @@ function normalize(parsed: any): DocAnalysis {
       id: `h${Date.now().toString(36)}${highlightCounter++}`,
       type: h.type,
       text: String(h.text ?? "").trim(),
-      date: typeof h.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(h.date) ? h.date : undefined,
+      date: toIsoDate(h.date),
       amount: h.amount ? String(h.amount) : undefined,
       severity: validSev.includes(h.severity) ? h.severity : "medium",
     }))
@@ -198,17 +233,32 @@ function normalize(parsed: any): DocAnalysis {
 
 export async function analyzeDocument(input: AnalyzeInput): Promise<DocAnalysis> {
   ensureKey();
-  const res = await client.chat.completions.create({
-    model: MODEL,
-    temperature: 0.1,
-    max_tokens: 4096,
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: ANALYSIS_SYSTEM },
-      { role: "user", content: userContent(input) },
-    ],
-  });
-  const raw = res.choices[0]?.message?.content ?? "";
+  const messages: ChatCompletionMessageParam[] = [
+    { role: "system", content: ANALYSIS_SYSTEM },
+    { role: "user", content: userContent(input) },
+  ];
+
+  let raw: string;
+  try {
+    const res = await client.chat.completions.create({
+      model: MODEL,
+      temperature: 0.1,
+      max_tokens: 4096,
+      response_format: { type: "json_object" },
+      messages,
+    });
+    raw = res.choices[0]?.message?.content ?? "";
+  } catch {
+    // Some OpenAI-compatible gateways reject response_format — retry without it
+    // (extractJson tolerates prose/markdown around the JSON).
+    const res = await client.chat.completions.create({
+      model: MODEL,
+      temperature: 0.1,
+      max_tokens: 4096,
+      messages,
+    });
+    raw = res.choices[0]?.message?.content ?? "";
+  }
   return normalize(extractJson(raw));
 }
 

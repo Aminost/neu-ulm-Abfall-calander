@@ -38,7 +38,8 @@ const server = http.createServer((req, res) => {
             "Rechnung der Stadtwerke Neu-Ulm. Der Betrag von 149,90 EUR ist faellig am 2026-08-15. Kundennummer 55123. Bei Zahlungsverzug entstehen Mahngebuehren.",
           highlights: [
             { type: "payment", text: "Pay electricity bill", amount: "149,90 EUR", severity: "high" },
-            { type: "deadline", text: "Payment due", date: "2026-08-15", severity: "high" },
+            // German date format on purpose — must be normalized to ISO.
+            { type: "deadline", text: "Payment due", date: "15.08.2026", severity: "high" },
             { type: "critical", text: "Late fees on overdue payment", severity: "medium" },
             { type: "bogus", text: "should be dropped", severity: "high" }, // invalid type → filtered
           ],
@@ -79,6 +80,17 @@ after(() => {
   rmSync(new URL("../data", import.meta.url), { recursive: true, force: true });
 });
 
+test("toIsoDate normalizes common real-world date formats", () => {
+  assert.equal(ai.toIsoDate("2026-08-15"), "2026-08-15"); // already ISO
+  assert.equal(ai.toIsoDate("15.08.2026"), "2026-08-15"); // German
+  assert.equal(ai.toIsoDate("15/08/2026"), "2026-08-15"); // European slash
+  assert.equal(ai.toIsoDate("5-8-2026"), "2026-08-05"); // single digits
+  assert.equal(ai.toIsoDate("2026/08/15"), "2026-08-15"); // year-first
+  assert.equal(ai.toIsoDate("not a date"), undefined);
+  assert.equal(ai.toIsoDate("32.13.2026"), undefined); // out of range
+  assert.equal(ai.toIsoDate(undefined), undefined);
+});
+
 test("analyze: OCR JSON is parsed and highlights normalized", async () => {
   const a = await ai.analyzeDocument({ text: "some invoice text" });
   assert.equal(a.title, "Stadtwerke Rechnung");
@@ -90,7 +102,7 @@ test("analyze: OCR JSON is parsed and highlights normalized", async () => {
 
   const deadline = a.highlights.find((h) => h.type === "deadline");
   const payment = a.highlights.find((h) => h.type === "payment");
-  assert.equal(deadline?.date, "2026-08-15");
+  assert.equal(deadline?.date, "2026-08-15"); // normalized from "15.08.2026"
   assert.equal(payment?.amount, "149,90 EUR");
   assert.equal(payment?.severity, "high");
 });
