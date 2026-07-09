@@ -184,6 +184,11 @@ npm install
 npm start                   # press i / a, or scan the QR with Expo Go
 ```
 
+**Want to see it work right away (no key, no scanning)?** Open **Settings →
+Load sample documents**. It seeds a realistic invoice, insurance letter and
+fine, so the Library, highlights, dashboard, knowledge graph and deadline alerts
+all populate instantly. (Chat still needs the backend running.)
+
 Then open **Settings** in the app and set the **Backend URL**:
 
 - Simulator/emulator on the same machine → `http://localhost:3001`

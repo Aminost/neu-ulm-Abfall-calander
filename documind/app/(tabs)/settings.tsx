@@ -1,9 +1,14 @@
-import { CheckCircle2, CloudDownload, Server, XCircle } from "lucide-react-native";
+import { CheckCircle2, CloudDownload, Server, Sparkles, XCircle } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { Alert, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button, Card, ScreenTitle } from "../../src/components/ui";
-import { checkHealth, fetchBlob, fetchServerDocuments } from "../../src/api/client";
+import {
+  checkHealth,
+  fetchBlob,
+  fetchServerDocuments,
+  upsertDocument,
+} from "../../src/api/client";
 import {
   getDocument,
   getSettings,
@@ -12,6 +17,8 @@ import {
   saveSettings,
   writeBase64File,
 } from "../../src/lib/storage";
+import { scheduleDeadlineReminders } from "../../src/lib/notifications";
+import { sampleDocuments } from "../../src/lib/sampleData";
 import { colors, font, radius, spacing } from "../../src/lib/theme";
 
 type Health = { state: "idle" | "checking" | "ok" | "fail"; detail?: string };
@@ -21,6 +28,33 @@ export default function SettingsScreen() {
   const [saved, setSaved] = useState(false);
   const [health, setHealth] = useState<Health>({ state: "idle" });
   const [restoring, setRestoring] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+
+  async function loadSamples() {
+    setSeeding(true);
+    try {
+      const samples = sampleDocuments();
+      for (const doc of samples) {
+        await saveDocument(doc);
+        scheduleDeadlineReminders(doc).catch(() => {});
+        // Push to the backend too, so chat/graph work on the samples if it's running.
+        upsertDocument({
+          id: doc.id,
+          title: doc.analysis.title,
+          createdAt: doc.createdAt,
+          analysis: doc.analysis,
+        }).catch(() => {});
+      }
+      Alert.alert(
+        "Sample documents loaded",
+        `Added ${samples.length} example documents. Open the Library, Graph and Ask tabs to explore.`,
+      );
+    } catch (e) {
+      Alert.alert("Couldn't load samples", e instanceof Error ? e.message : String(e));
+    } finally {
+      setSeeding(false);
+    }
+  }
 
   async function restore() {
     setRestoring(true);
@@ -155,6 +189,24 @@ export default function SettingsScreen() {
             onPress={restore}
             variant="secondary"
             loading={restoring}
+          />
+        </Card>
+
+        <Card style={{ marginTop: spacing.md, gap: spacing.md }}>
+          <View style={styles.labelRow}>
+            <Sparkles color={colors.accent} size={18} />
+            <Text style={styles.label}>Try it out</Text>
+          </View>
+          <Text style={styles.hint}>
+            Load a few realistic example documents (an invoice, an insurance letter, and a fine)
+            to explore the Library, highlights, knowledge graph and deadline alerts without
+            scanning anything.
+          </Text>
+          <Button
+            label="Load sample documents"
+            onPress={loadSamples}
+            variant="secondary"
+            loading={seeding}
           />
         </Card>
 
