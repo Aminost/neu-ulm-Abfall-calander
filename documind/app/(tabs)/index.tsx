@@ -14,7 +14,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Badge, Card, EmptyState, Pill, ScreenTitle } from "../../src/components/ui";
-import { listDocuments } from "../../src/lib/storage";
+import { fetchServerDocuments } from "../../src/api/client";
+import { listDocuments, mergeRestored } from "../../src/lib/storage";
 import { colors, font, radius, severityWeight, spacing } from "../../src/lib/theme";
 import type { DocumentRecord, Highlight } from "../../src/lib/types";
 
@@ -67,10 +68,23 @@ export default function LibraryScreen() {
     setDocs(await listDocuments());
   }, []);
 
+  // Silently pull any documents added on other devices, so the library stays
+  // current everywhere without a manual restore. Offline / no-backend is ignored.
+  const backgroundSync = useCallback(async () => {
+    try {
+      const remote = await fetchServerDocuments();
+      const added = await mergeRestored(remote);
+      if (added.length > 0) await load();
+    } catch {
+      /* backend unreachable — keep showing local documents */
+    }
+  }, [load]);
+
   useFocusEffect(
     useCallback(() => {
       load();
-    }, [load]),
+      backgroundSync();
+    }, [load, backgroundSync]),
   );
 
   const onRefresh = useCallback(async () => {
