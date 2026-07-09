@@ -1,0 +1,166 @@
+// Local-first document storage. Document metadata + analysis live in
+// AsyncStorage; the page image is copied into the app's document directory so
+// it persists independently of the OS cache. This is the "save to local /
+// device storage" target the app defaults to.
+
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as FileSystem from "expo-file-system/legacy";
+import type { DocumentRecord } from "./types";
+
+const INDEX_KEY = "documind.documents.v1";
+const SETTINGS_KEY = "documind.settings.v1";
+const IMAGE_DIR = FileSystem.documentDirectory + "documind/";
+
+export interface Settings {
+  apiUrl: string;
+  onboarded?: boolean;
+  /** Days before a deadline to send the first reminder. Default 2. */
+  reminderDaysBefore?: number;
+  /** Also schedule reminders for dated payments, not just deadlines. Default true. */
+  remindPayments?: boolean;
+}
+
+async function ensureDir() {
+  const info = await FileSystem.getInfoAsync(IMAGE_DIR);
+  if (!info.exists) {
+    await FileSystem.makeDirectoryAsync(IMAGE_DIR, { intermediates: true });
+  }
+}
+
+/** Copy a transient capture/import into permanent app storage. Returns the new uri. */
+export async function persistFile(sourceUri: string, id: string, ext: string): Promise<string> {
+  try {
+    await ensureDir();
+    const dest = `${IMAGE_DIR}${id}.${ext}`;
+    await FileSystem.copyAsync({ from: sourceUri, to: dest });
+    return dest;
+  } catch {
+    // Fall back to the original uri if copying fails (e.g. web).
+    return sourceUri;
+  }
+}
+
+export async function persistImage(sourceUri: string, id: string): Promise<string> {
+  const ext = sourceUri.split(".").pop()?.split("?")[0] || "jpg";
+  return persistFile(sourceUri, id, ext);
+}
+
+/** Write base64 content (e.g. a restored blob) to a local file. Returns its uri ("" on web). */
+export async function writeBase64File(base64: string, id: string, ext: string): Promise<string> {
+  try {
+    await ensureDir();
+    const dest = `${IMAGE_DIR}${id}.${ext}`;
+    await FileSystem.writeAsStringAsync(dest, base64, { encoding: "base64" });
+    return dest;
+  } catch {
+    return ""; // unsupported (e.g. web)
+  }
+}
+
+export async function listDocuments(): Promise<DocumentRecord[]> {
+  const raw = await AsyncStorage.getItem(INDEX_KEY);
+  if (!raw) return [];
+  try {
+    const docs = JSON.parse(raw) as DocumentRecord[];
+    return docs.sort((a, b) => b.createdAt - a.createdAt);
+  } catch {
+    return [];
+  }
+}
+
+export async function getDocument(id: string): Promise<DocumentRecord | undefined> {
+  const docs = await listDocuments();
+  return docs.find((d) => d.id === id);
+}
+
+async function writeAll(docs: DocumentRecord[]): Promise<void> {
+  await AsyncStorage.setItem(INDEX_KEY, JSON.stringify(docs));
+}
+
+export async function saveDocument(doc: DocumentRecord): Promise<void> {
+  const docs = await listDocuments();
+  const idx = docs.findIndex((d) => d.id === doc.id);
+  if (idx >= 0) docs[idx] = doc;
+  else docs.push(doc);
+  await writeAll(docs);
+}
+
+export async function deleteDocument(id: string): Promise<void> {
+  const docs = await listDocuments();
+  const doc = docs.find((d) => d.id === id);
+  for (const uri of [doc?.imageUri, doc?.pdfUri]) {
+    if (uri && uri.startsWith(IMAGE_DIR)) {
+      try {
+        await FileSystem.deleteAsync(uri, { idempotent: true });
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  await writeAll(docs.filter((d) => d.id !== id));
+}
+
+/**
+ * Merge documents fetched from the backend into local storage. Existing local
+ * docs (which may have local image/PDF files) are kept; only genuinely new
+ * documents are added. Returns how many were added.
+ */
+export async function mergeRestored(
+  remote: { docId: string; title: string; createdAt: number; analysis: DocumentRecord["analysis"] }[],
+): Promise<string[]> {
+  const local = await listDocuments();
+  const have = new Set(local.map((d) => d.id));
+  const added: string[] = [];
+  for (const r of remote) {
+    if (have.has(r.docId)) continue;
+    local.push({
+      id: r.docId,
+      createdAt: r.createdAt,
+      status: "ready",
+      analysis: r.analysis,
+    });
+    added.push(r.docId);
+  }
+  if (added.length > 0) await writeAll(local);
+  return added;
+}
+
+/** Delete every document (metadata + stored files) from the device. Returns how many were removed. */
+export async function clearAllDocuments(): Promise<number> {
+  const docs = await listDocuments();
+  for (const d of docs) {
+    for (const uri of [d.imageUri, d.pdfUri]) {
+      if (uri && uri.startsWith(IMAGE_DIR)) {
+        try {
+          await FileSystem.deleteAsync(uri, { idempotent: true });
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+  }
+  await AsyncStorage.removeItem(INDEX_KEY);
+  return docs.length;
+}
+
+export async function getSettings(): Promise<Settings> {
+  const raw = await AsyncStorage.getItem(SETTINGS_KEY);
+  const fallback: Settings = {
+    apiUrl: process.env.EXPO_PUBLIC_API_URL || "http://localhost:3001",
+  };
+  if (!raw) return fallback;
+  try {
+    return { ...fallback, ...(JSON.parse(raw) as Partial<Settings>) };
+  } catch {
+    return fallback;
+  }
+}
+
+export async function saveSettings(patch: Partial<Settings>): Promise<void> {
+  const current = await getSettings();
+  await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...current, ...patch }));
+}
+
+export function newId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}

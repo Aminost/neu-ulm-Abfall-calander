@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "DocuMind",
+    "slug": "documind",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "documind",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#F7F6F2"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.aminost.documind",
+      "infoPlist": {
+        "NSCameraUsageDescription": "DocuMind uses the camera to scan your documents.",
+        "NSPhotoLibraryUsageDescription": "DocuMind imports documents from your photo library."
+      }
+    },
+    "android": {
+      "package": "com.aminost.documind",
+      "adaptiveIcon": {
+        "backgroundColor": "#F7F6F2"
+      },
+      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE"]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "DocuMind uses the camera to scan your documents."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "DocuMind imports documents from your photo library."
+        }
+      ],
+      "react-native-document-scanner-plugin"
+    ],
+    "extra": {
+      "router": {}
+    }
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "name": "documind-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AI backend for DocuMind: vision OCR, classification, extraction and RAG chat. Provider-flexible (OpenAI / ChatGPT / kit.ai-compatible).",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "test": "node --import tsx --test src/pipeline.test.ts src/heuristics.test.ts",
+    "smoke": "tsx src/smoke.ts",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "openai": "^4.77.0",
+    "tesseract.js": "^5.1.1",
+    "unpdf": "^1.6.2"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.14.0",
+    "tsx": "^4.21.0",
+    "typescript": "~5.9.0"
+  }
+}
