@@ -125,6 +125,24 @@ export async function mergeRestored(
   return added;
 }
 
+/** Delete every document (metadata + stored files) from the device. Returns how many were removed. */
+export async function clearAllDocuments(): Promise<number> {
+  const docs = await listDocuments();
+  for (const d of docs) {
+    for (const uri of [d.imageUri, d.pdfUri]) {
+      if (uri && uri.startsWith(IMAGE_DIR)) {
+        try {
+          await FileSystem.deleteAsync(uri, { idempotent: true });
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+  }
+  await AsyncStorage.removeItem(INDEX_KEY);
+  return docs.length;
+}
+
 export async function getSettings(): Promise<Settings> {
   const raw = await AsyncStorage.getItem(SETTINGS_KEY);
   const fallback: Settings = {

@@ -1,17 +1,20 @@
-import { Bell, CheckCircle2, CloudDownload, Server, Sparkles, XCircle } from "lucide-react-native";
+import { Bell, CheckCircle2, CloudDownload, Database, Server, Sparkles, XCircle } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { Alert, Platform, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button, Card, ScreenTitle } from "../../src/components/ui";
 import {
   checkHealth,
+  deleteServerDocument,
   fetchBlob,
   fetchServerDocuments,
   upsertDocument,
 } from "../../src/api/client";
 import {
+  clearAllDocuments,
   getDocument,
   getSettings,
+  listDocuments,
   mergeRestored,
   saveDocument,
   saveSettings,
@@ -20,7 +23,6 @@ import {
 import { exportLibrary, importLibrary } from "../../src/lib/backup";
 import { rescheduleAll, scheduleDeadlineReminders } from "../../src/lib/notifications";
 import { sampleDocuments } from "../../src/lib/sampleData";
-import { listDocuments } from "../../src/lib/storage";
 import { colors, font, radius, spacing } from "../../src/lib/theme";
 
 type Health = { state: "idle" | "checking" | "ok" | "fail"; detail?: string };
@@ -34,6 +36,33 @@ export default function SettingsScreen() {
   const [reminderDays, setReminderDays] = useState(2);
   const [remindPay, setRemindPay] = useState(true);
   const [rescheduling, setRescheduling] = useState(false);
+  const [docCount, setDocCount] = useState(0);
+
+  function refreshCount() {
+    listDocuments().then((d) => setDocCount(d.length));
+  }
+
+  function clearAll() {
+    Alert.alert(
+      "Delete all documents?",
+      "This permanently removes every document from this device and the backend. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete all",
+          style: "destructive",
+          onPress: async () => {
+            const docs = await listDocuments();
+            await clearAllDocuments();
+            await rescheduleAll([]).catch(() => {}); // cancels all reminders
+            for (const d of docs) deleteServerDocument(d.id).catch(() => {});
+            refreshCount();
+            Alert.alert("Cleared", "All documents were removed.");
+          },
+        },
+      ],
+    );
+  }
 
   async function updateReminderDays(n: number) {
     setReminderDays(n);
@@ -158,6 +187,7 @@ export default function SettingsScreen() {
       setReminderDays(s.reminderDaysBefore ?? 2);
       setRemindPay(s.remindPayments ?? true);
     });
+    refreshCount();
   }, []);
 
   async function save() {
@@ -325,6 +355,22 @@ export default function SettingsScreen() {
           />
         </Card>
 
+        <Card style={{ marginTop: spacing.md, gap: spacing.md }}>
+          <View style={styles.labelRow}>
+            <Database color={colors.accent} size={18} />
+            <Text style={styles.label}>Data</Text>
+          </View>
+          <Text style={styles.hint}>
+            {docCount} document{docCount === 1 ? "" : "s"} stored on this device.
+          </Text>
+          <Pressable
+            onPress={clearAll}
+            style={({ pressed }) => [styles.dangerBtn, pressed && { opacity: 0.9 }]}
+          >
+            <Text style={styles.dangerText}>Delete all documents</Text>
+          </Pressable>
+        </Card>
+
         <Card style={{ marginTop: spacing.md }}>
           <Text style={styles.aboutTitle}>About</Text>
           <Text style={styles.aboutText}>
@@ -381,6 +427,14 @@ const styles = StyleSheet.create({
   backupRow: { flexDirection: "row", gap: spacing.md },
   switchRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   switchLabel: { fontSize: font.body, color: colors.text, flex: 1 },
+  dangerBtn: {
+    borderWidth: 1,
+    borderColor: colors.critical,
+    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    alignItems: "center",
+  },
+  dangerText: { color: colors.critical, fontWeight: "700", fontSize: font.body },
   aboutTitle: { fontSize: font.h3, fontWeight: "700", color: colors.text, marginBottom: spacing.sm },
   aboutText: { fontSize: font.body, color: colors.textMuted, lineHeight: 21 },
 });
