@@ -132,6 +132,67 @@ export async function askQuestion(
   });
 }
 
+/**
+ * Streaming chat. Emits answer text via onDelta as it arrives and resolves with
+ * the citations. Uses XMLHttpRequest (works on React Native and web). The
+ * backend sends a JSON header line with citations, a ␞ marker, then the answer.
+ */
+export async function askQuestionStream(
+  question: string,
+  history: ChatMessage[],
+  onDelta: (text: string) => void,
+): Promise<{ citations: Citation[] }> {
+  const url = (await baseUrl()) + "/api/chat/stream";
+  const payload = JSON.stringify({
+    question,
+    history: history
+      .filter((m) => !m.pending)
+      .map((m) => ({ role: m.role, content: m.content })),
+  });
+  const MARK = "\n␞\n";
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    xhr.setRequestHeader("Content-Type", "application/json");
+
+    let citations: Citation[] = [];
+    let headerDone = false;
+    let emitted = 0;
+
+    const process = () => {
+      const text = xhr.responseText;
+      if (!headerDone) {
+        const idx = text.indexOf(MARK);
+        if (idx < 0) return;
+        try {
+          citations = (JSON.parse(text.slice(0, idx)).citations ?? []) as Citation[];
+        } catch {
+          /* leave citations empty */
+        }
+        headerDone = true;
+        emitted = idx + MARK.length;
+      }
+      if (headerDone && text.length > emitted) {
+        onDelta(text.slice(emitted));
+        emitted = text.length;
+      }
+    };
+
+    xhr.onprogress = process;
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        process();
+        resolve({ citations });
+      } else {
+        reject(new Error(`Server error ${xhr.status}: ${xhr.responseText.slice(0, 200)}`));
+      }
+    };
+    xhr.onerror = () => reject(new Error("Network error contacting the backend."));
+    xhr.send(payload);
+  });
+}
+
 export async function checkHealth(): Promise<{ ok: boolean; model?: string }> {
   const url = (await baseUrl()) + "/api/health";
   const res = await fetch(url);

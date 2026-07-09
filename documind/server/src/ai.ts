@@ -365,3 +365,39 @@ export async function answerQuestion(
   });
   return res.choices[0]?.message?.content?.trim() ?? "I couldn't generate an answer.";
 }
+
+/** Same as answerQuestion, but streams the answer token-by-token via onDelta. */
+export async function answerQuestionStream(
+  question: string,
+  contexts: { title: string; text: string }[],
+  history: { role: "user" | "assistant"; content: string }[],
+  facts: string,
+  onDelta: (text: string) => void,
+): Promise<void> {
+  ensureKey();
+  const excerpts =
+    contexts.length > 0
+      ? contexts.map((c, i) => `[${i + 1}] ${c.title}\n${c.text}`).join("\n\n---\n\n")
+      : "(no matching excerpts)";
+  const factsBlock = facts.trim() ? facts : "(no documents digitized yet)";
+
+  const stream = await client.chat.completions.create({
+    model: MODEL,
+    temperature: 0.2,
+    max_tokens: 800,
+    stream: true,
+    messages: [
+      { role: "system", content: CHAT_SYSTEM },
+      ...history.slice(-6),
+      {
+        role: "user",
+        content: `FACTS overview (knowledge graph):\n${factsBlock}\n\nEXCERPTS:\n${excerpts}\n\nQuestion: ${question}`,
+      },
+    ],
+  });
+
+  for await (const chunk of stream) {
+    const delta = chunk.choices[0]?.delta?.content;
+    if (delta) onDelta(delta);
+  }
+}

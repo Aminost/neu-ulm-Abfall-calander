@@ -1,7 +1,14 @@
 import "dotenv/config";
 import cors from "cors";
 import express from "express";
-import { analyzeDocument, answerQuestion, embedTexts, MODEL, type DocAnalysis } from "./ai.js";
+import {
+  analyzeDocument,
+  answerQuestion,
+  answerQuestionStream,
+  embedTexts,
+  MODEL,
+  type DocAnalysis,
+} from "./ai.js";
 import {
   type BlobKind,
   chunkText,
@@ -156,6 +163,50 @@ app.post(
       .map((h) => ({ docId: h.docId, title: h.title, snippet: h.text.slice(0, 140) }));
 
     res.json({ answer, citations });
+  }),
+);
+
+// Streaming version of /api/chat. Emits a JSON header line with citations,
+// a record-separator marker (␞), then the answer text token-by-token.
+app.post(
+  "/api/chat/stream",
+  asyncRoute(async (req, res) => {
+    const { question, history } = req.body ?? {};
+    if (!question || typeof question !== "string") {
+      res.status(400).json({ error: "Provide a question." });
+      return;
+    }
+    if (!process.env.AI_API_KEY) {
+      res.status(500).json({ error: "AI_API_KEY is not set on the server." });
+      return;
+    }
+
+    const embedded = await embedTexts([question]);
+    const queryEmbedding = embedded ? embedded[0] : null;
+    const hits = search(question, queryEmbedding, 5).filter((h) => h.score > 0.05);
+
+    const seen = new Set<string>();
+    const citations = hits
+      .filter((h) => (seen.has(h.docId) ? false : (seen.add(h.docId), true)))
+      .slice(0, 3)
+      .map((h) => ({ docId: h.docId, title: h.title, snippet: h.text.slice(0, 140) }));
+
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache");
+    res.write(JSON.stringify({ citations }) + "\n␞\n");
+
+    try {
+      await answerQuestionStream(
+        question,
+        hits.map((h) => ({ title: h.title, text: h.text })),
+        Array.isArray(history) ? history : [],
+        factsSheet(),
+        (delta) => res.write(delta),
+      );
+    } catch (err) {
+      res.write("\n\n[Error generating answer: " + (err instanceof Error ? err.message : "unknown") + "]");
+    }
+    res.end();
   }),
 );
 

@@ -13,7 +13,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { askQuestion } from "../../src/api/client";
+import { askQuestion, askQuestionStream } from "../../src/api/client";
 import { newId } from "../../src/lib/storage";
 import { colors, font, radius, spacing } from "../../src/lib/theme";
 import type { ChatMessage } from "../../src/lib/types";
@@ -37,27 +37,35 @@ export default function ChatScreen() {
     if (!q || busy) return;
     setInput("");
     const userMsg: ChatMessage = { id: newId(), role: "user", content: q };
-    const history = [...messages, userMsg];
-    setMessages([...history, { id: newId(), role: "assistant", content: "", pending: true }]);
+    const priorHistory = messages;
+    const asstId = newId();
+    setMessages([...priorHistory, userMsg, { id: asstId, role: "assistant", content: "", pending: true }]);
     setBusy(true);
     requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
 
+    const update = (patch: Partial<ChatMessage>) =>
+      setMessages((prev) => prev.map((m) => (m.id === asstId ? { ...m, ...patch } : m)));
+
     try {
-      const { answer, citations } = await askQuestion(q, messages);
-      setMessages([
-        ...history,
-        { id: newId(), role: "assistant", content: answer, citations },
-      ]);
-    } catch (e) {
-      setMessages([
-        ...history,
-        {
-          id: newId(),
-          role: "assistant",
-          content:
-            e instanceof Error ? `⚠️ ${e.message}` : "Something went wrong.",
-        },
-      ]);
+      // Stream the answer token-by-token.
+      let acc = "";
+      const { citations } = await askQuestionStream(q, priorHistory, (delta) => {
+        acc += delta;
+        update({ content: acc, pending: false });
+        scrollRef.current?.scrollToEnd({ animated: false });
+      });
+      update({ content: acc || "…", citations, pending: false });
+    } catch {
+      // Fall back to the non-streaming endpoint (older server / streaming blocked).
+      try {
+        const { answer, citations } = await askQuestion(q, priorHistory);
+        update({ content: answer, citations, pending: false });
+      } catch (e) {
+        update({
+          content: e instanceof Error ? `⚠️ ${e.message}` : "Something went wrong.",
+          pending: false,
+        });
+      }
     } finally {
       setBusy(false);
       requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
