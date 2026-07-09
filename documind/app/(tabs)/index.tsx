@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Badge, Card, EmptyState, Pill, ScreenTitle } from "../../src/components/ui";
 import { fetchServerDocuments } from "../../src/api/client";
+import { dashboardStats } from "../../src/lib/agendaLogic";
 import { getSettings, listDocuments, mergeRestored } from "../../src/lib/storage";
 import { colors, font, radius, severityWeight, spacing } from "../../src/lib/theme";
 import type { DocumentRecord, Highlight } from "../../src/lib/types";
@@ -23,15 +24,6 @@ function topHighlights(doc: DocumentRecord): Highlight[] {
   return [...doc.analysis.highlights]
     .sort((a, b) => severityWeight[b.severity] - severityWeight[a.severity])
     .slice(0, 3);
-}
-
-function nextDeadline(docs: DocumentRecord[]): { text: string; date: string } | null {
-  const today = new Date().toISOString().slice(0, 10);
-  const upcoming = docs
-    .flatMap((d) => d.analysis.highlights)
-    .filter((h) => h.type === "deadline" && h.date && h.date >= today)
-    .sort((a, b) => (a.date! < b.date! ? -1 : 1));
-  return upcoming[0] ? { text: upcoming[0].text, date: upcoming[0].date! } : null;
 }
 
 export default function LibraryScreen() {
@@ -102,14 +94,8 @@ export default function LibraryScreen() {
     setRefreshing(false);
   }, [load]);
 
-  const deadline = nextDeadline(docs);
-  const today = new Date().toISOString().slice(0, 10);
-  const allHighlights = docs.flatMap((d) => d.analysis.highlights);
-  const upcomingCount = allHighlights.filter(
-    (h) => h.type === "deadline" && h.date && h.date >= today,
-  ).length;
-  const paymentsCount = allHighlights.filter((h) => h.type === "payment").length;
-  const criticalCount = allHighlights.filter((h) => h.type === "critical").length;
+  const { upcomingCount, paymentsCount, criticalCount, nextDeadline: deadline } =
+    dashboardStats(docs);
 
   if (!ready) return <SafeAreaView style={styles.safe} edges={["top"]} />;
 
