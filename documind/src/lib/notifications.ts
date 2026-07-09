@@ -5,8 +5,25 @@
 
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
+import { detectRecurrence, type Recurrence } from "./recurrence";
 import { getSettings } from "./storage";
 import type { DocumentRecord, HighlightType } from "./types";
+
+/** Build a repeating trigger for a detected recurrence anchored on a due date. */
+function recurringTrigger(rec: Recurrence, due: Date): Notifications.NotificationTriggerInput | null {
+  const hour = 9;
+  const minute = 0;
+  switch (rec) {
+    case "weekly":
+      return { type: Notifications.SchedulableTriggerInputTypes.WEEKLY, weekday: due.getDay() + 1, hour, minute };
+    case "monthly":
+      return { type: Notifications.SchedulableTriggerInputTypes.MONTHLY, day: due.getDate(), hour, minute };
+    case "yearly":
+      return { type: Notifications.SchedulableTriggerInputTypes.YEARLY, month: due.getMonth() + 1, day: due.getDate(), hour, minute };
+    default:
+      return null; // quarterly has no native repeat trigger — skip
+  }
+}
 
 let configured = false;
 
@@ -71,6 +88,19 @@ export async function scheduleDeadlineReminders(doc: DocumentRecord): Promise<nu
         trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: p.when },
       });
       scheduled += 1;
+    }
+
+    // Recurring obligation (monthly rent, annual insurance, …) → repeating reminder.
+    const rec = detectRecurrence(`${doc.analysis.fullText} ${h.text}`);
+    if (rec) {
+      const trigger = recurringTrigger(rec, due);
+      if (trigger) {
+        await Notifications.scheduleNotificationAsync({
+          content: { title: `Recurring (${rec}): ${title}`, body, data: { docId: doc.id } },
+          trigger,
+        });
+        scheduled += 1;
+      }
     }
   }
 

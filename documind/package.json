@@ -8,7 +8,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "test": "node --import tsx --test src/lib/agendaLogic.test.ts",
+    "test": "node --import tsx --test src/lib/agendaLogic.test.ts src/lib/recurrence.test.ts",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
