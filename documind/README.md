@@ -1,5 +1,9 @@
 # DocuMind
 
+> **Build status:** verified — `npm install`, `tsc --noEmit`, and Metro bundling
+> for **web and Android** all pass on a clean checkout. A committed
+> `package-lock.json` pins the exact versions that were tested.
+
 A clean, document-digitization app for React Native (Expo). Scan or import a
 document and DocuMind reads it, sorts it by topic, flags the things that matter
 (deadlines, payments, critical issues), saves it locally on your device, and
@@ -22,6 +26,7 @@ a knowledge graph.
 | **Local storage** | Document metadata + analysis live in on-device storage; page images are copied into the app's document directory. |
 | **RAG chatbot** | Ask questions; the backend retrieves the most relevant passages (vector search) and answers with citations. |
 | **Knowledge graph** | Entities (people, organizations, amounts, dates) extracted from your documents, linked by how they relate. |
+| **Deadline alerts** | On-device reminders are scheduled automatically for detected deadlines (2 days before + on the day), so bureaucratic due-dates don't slip. |
 
 ### A note on the OCR “new approach”
 

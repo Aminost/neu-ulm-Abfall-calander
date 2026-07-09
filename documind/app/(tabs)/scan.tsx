@@ -17,6 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { CameraModal } from "../../src/components/CameraModal";
 import { Card, ScreenTitle } from "../../src/components/ui";
 import { analyzeImage, analyzeImages, analyzeText, indexDocument } from "../../src/api/client";
+import { scheduleDeadlineReminders } from "../../src/lib/notifications";
 import { newId, persistFile, saveDocument } from "../../src/lib/storage";
 import {
   imagesToPdf,
@@ -63,16 +64,19 @@ export default function ScanScreen() {
     const id = newId();
     const storedImg = thumbUri ? await persistFile(thumbUri, id, "jpg") : undefined;
     const storedPdf = pdfUri ? await persistFile(pdfUri, id, "pdf") : undefined;
-    await saveDocument({
+    const record = {
       id,
       createdAt: Date.now(),
       imageUri: storedImg,
       pdfUri: storedPdf,
       pageCount,
-      status: "ready",
+      status: "ready" as const,
       analysis,
-    });
+    };
+    await saveDocument(record);
     indexDocument(id, analysis.title, analysis.fullText).catch(() => {});
+    // Set on-device reminders for any detected deadlines.
+    scheduleDeadlineReminders(record).catch(() => {});
     reset();
     router.push(`/document/${id}`);
   }
