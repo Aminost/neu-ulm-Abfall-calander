@@ -1,7 +1,19 @@
 import React from "react";
 import * as DocumentPicker from "expo-document-picker";
 import { useRouter } from "expo-router";
-import { Camera, FileText, FileUp, ImagePlus, Info, ScanLine } from "lucide-react-native";
+import {
+  Camera,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  FileText,
+  FileUp,
+  ImagePlus,
+  Info,
+  Plus,
+  ScanLine,
+  Trash2,
+} from "lucide-react-native";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -50,10 +62,33 @@ export default function ScanScreen() {
   const [stage, setStage] = useState<Stage>("idle");
   const [preview, setPreview] = useState<string | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [review, setReview] = useState<Page[]>([]); // pages awaiting review before PDF
 
   function reset() {
     setStage("idle");
     setPreview(null);
+    setReview([]);
+  }
+
+  function addPages(pages: Page[]) {
+    if (pages.length) setReview((prev) => [...prev, ...pages]);
+  }
+  function removePage(i: number) {
+    setReview((prev) => prev.filter((_, idx) => idx !== i));
+  }
+  function movePage(i: number, dir: -1 | 1) {
+    setReview((prev) => {
+      const j = i + dir;
+      if (j < 0 || j >= prev.length) return prev;
+      const next = [...prev];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+  }
+  function confirmReview() {
+    const pages = review;
+    setReview([]);
+    runPipeline(pages);
   }
 
   function fail(e: unknown) {
@@ -132,7 +167,8 @@ export default function ScanScreen() {
         const pages = await Promise.all(
           uris.map(async (uri) => ({ uri, base64: await uriToBase64(uri) })),
         );
-        await runPipeline(pages);
+        reset();
+        addPages(pages);
       } catch (e) {
         fail(e);
       }
@@ -145,7 +181,7 @@ export default function ScanScreen() {
     try {
       const pages = await pickImagesFromLibrary();
       if (!pages) return;
-      await runPipeline(pages);
+      addPages(pages);
     } catch (e) {
       fail(e);
     }
@@ -162,7 +198,7 @@ export default function ScanScreen() {
     try {
       if (mime.startsWith("image/")) {
         const base64 = await uriToBase64(file.uri);
-        await runPipeline([{ uri: file.uri, base64 }]);
+        addPages([{ uri: file.uri, base64 }]);
       } else if (mime === "application/pdf") {
         setStage("analyzing");
         const data = await uriToBase64(file.uri);
@@ -190,7 +226,7 @@ export default function ScanScreen() {
         onClose={() => setCameraOpen(false)}
         onDone={(pages) => {
           setCameraOpen(false);
-          runPipeline(pages);
+          addPages(pages);
         }}
       />
 
@@ -214,6 +250,16 @@ export default function ScanScreen() {
               {STAGE_TEXT[stage as Exclude<Stage, "idle">]}
             </Text>
           </Card>
+        ) : review.length > 0 ? (
+          <ReviewPages
+            pages={review}
+            onRemove={removePage}
+            onMove={movePage}
+            onAddCamera={() => setCameraOpen(true)}
+            onAddLibrary={onImportImage}
+            onCancel={() => setReview([])}
+            onConfirm={confirmReview}
+          />
         ) : (
           <>
             <Pressable onPress={onScanPress} style={({ pressed }) => pressed && { opacity: 0.9 }}>
@@ -259,6 +305,75 @@ export default function ScanScreen() {
         )}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function ReviewPages({
+  pages,
+  onRemove,
+  onMove,
+  onAddCamera,
+  onAddLibrary,
+  onCancel,
+  onConfirm,
+}: {
+  pages: Page[];
+  onRemove: (i: number) => void;
+  onMove: (i: number, dir: -1 | 1) => void;
+  onAddCamera: () => void;
+  onAddLibrary: () => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <>
+      <Card style={{ gap: spacing.md }}>
+        <Text style={styles.reviewTitle}>
+          Review {pages.length} page{pages.length === 1 ? "" : "s"}
+        </Text>
+        <Text style={styles.reviewHint}>Reorder or remove pages before creating the PDF.</Text>
+        {pages.map((p, i) => (
+          <View key={`${p.uri}-${i}`} style={styles.pageRow}>
+            <Image source={{ uri: p.uri }} style={styles.pageThumb} resizeMode="cover" />
+            <Text style={styles.pageNum}>Page {i + 1}</Text>
+            <View style={styles.pageActions}>
+              <Pressable onPress={() => onMove(i, -1)} disabled={i === 0} hitSlop={6} style={styles.pageBtn}>
+                <ChevronUp color={i === 0 ? colors.textFaint : colors.text} size={18} />
+              </Pressable>
+              <Pressable
+                onPress={() => onMove(i, 1)}
+                disabled={i === pages.length - 1}
+                hitSlop={6}
+                style={styles.pageBtn}
+              >
+                <ChevronDown color={i === pages.length - 1 ? colors.textFaint : colors.text} size={18} />
+              </Pressable>
+              <Pressable onPress={() => onRemove(i)} hitSlop={6} style={styles.pageBtn}>
+                <Trash2 color={colors.critical} size={17} />
+              </Pressable>
+            </View>
+          </View>
+        ))}
+        <View style={styles.addRow}>
+          <Pressable onPress={onAddCamera} style={styles.addChip}>
+            <Camera color={colors.accent} size={16} />
+            <Text style={styles.addChipText}>Add via camera</Text>
+          </Pressable>
+          <Pressable onPress={onAddLibrary} style={styles.addChip}>
+            <Plus color={colors.accent} size={16} />
+            <Text style={styles.addChipText}>Add from library</Text>
+          </Pressable>
+        </View>
+      </Card>
+
+      <Pressable onPress={onConfirm} style={({ pressed }) => [styles.confirmBtn, pressed && { opacity: 0.9 }]}>
+        <Check color={colors.white} size={20} />
+        <Text style={styles.confirmText}>Create PDF & analyze</Text>
+      </Pressable>
+      <Pressable onPress={onCancel} style={styles.cancelBtn}>
+        <Text style={styles.cancelText}>Cancel</Text>
+      </Pressable>
+    </>
   );
 }
 
@@ -328,4 +443,51 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     textAlign: "center",
   },
+  reviewTitle: { fontSize: font.h3, fontWeight: "700", color: colors.text },
+  reviewHint: { fontSize: font.small, color: colors.textMuted, marginTop: -6 },
+  pageRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: spacing.md,
+  },
+  pageThumb: { width: 46, height: 60, borderRadius: radius.sm, backgroundColor: colors.surfaceAlt },
+  pageNum: { flex: 1, fontSize: font.body, color: colors.text, fontWeight: "600" },
+  pageActions: { flexDirection: "row", gap: spacing.sm, alignItems: "center" },
+  pageBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: colors.surfaceAlt,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  addRow: { flexDirection: "row", gap: spacing.sm, flexWrap: "wrap", marginTop: spacing.xs },
+  addChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.accentSoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+  },
+  addChipText: { fontSize: font.small, color: colors.accent, fontWeight: "600" },
+  confirmBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.accent,
+    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    marginTop: spacing.md,
+  },
+  confirmText: { color: colors.white, fontWeight: "700", fontSize: font.body },
+  cancelBtn: { alignItems: "center", paddingVertical: spacing.md },
+  cancelText: { color: colors.textMuted, fontSize: font.body, fontWeight: "600" },
 });
