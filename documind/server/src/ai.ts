@@ -11,6 +11,7 @@ import type {
   ChatCompletionMessageParam,
 } from "openai/resources/chat/completions";
 import { heuristicAnalyze, heuristicAnswer } from "./heuristics";
+import { ocrImages } from "./ocr";
 
 export const MODEL = process.env.AI_MODEL || "openai/azure.gpt-4.1";
 // Empty string disables embeddings; the server falls back to keyword retrieval.
@@ -296,11 +297,16 @@ export async function analyzeDocument(input: AnalyzeInput): Promise<DocAnalysis>
     }
   }
 
-  // No model configured: use the offline heuristic analyzer. It needs text —
-  // for text/PDF documents that works fully; image-only scans can't be OCR'd
-  // without a model, so we return a minimal record the user can still edit.
+  // No model configured: run the fully offline path. Text/PDF documents are
+  // analyzed directly; photographed documents are OCR'd locally (Tesseract,
+  // bundled German+English) so scanning still works with no network / no key.
   if (!hasModel()) {
-    return heuristicAnalyze(input.text ?? "");
+    let text = input.text ?? "";
+    if (!text) {
+      const imgs = input.imagesBase64?.length ? input.imagesBase64 : input.imageBase64 ? [input.imageBase64] : [];
+      if (imgs.length) text = await ocrImages(imgs, input.mimeType);
+    }
+    return heuristicAnalyze(text);
   }
 
   const messages: ChatCompletionMessageParam[] = [
@@ -332,14 +338,17 @@ export async function analyzeDocument(input: AnalyzeInput): Promise<DocAnalysis>
     }
     return normalize(extractJson(raw));
   } catch (err) {
-    // Model unreachable / errored. If we at least have text, degrade gracefully
-    // to the heuristic analyzer rather than losing the document entirely.
-    if (input.text && input.text.trim().length > 0) {
-      console.warn(
-        `Model analysis failed (${err instanceof Error ? err.message : err}); using offline heuristics.`,
-      );
-      return heuristicAnalyze(input.text);
+    // Model unreachable / errored. Degrade gracefully to the offline path
+    // (OCR photos locally if needed) rather than losing the document entirely.
+    console.warn(
+      `Model analysis failed (${err instanceof Error ? err.message : err}); using offline heuristics.`,
+    );
+    let text = input.text ?? "";
+    if (!text) {
+      const imgs = input.imagesBase64?.length ? input.imagesBase64 : input.imageBase64 ? [input.imageBase64] : [];
+      if (imgs.length) text = await ocrImages(imgs, input.mimeType);
     }
+    if (text.trim().length > 0) return heuristicAnalyze(text);
     throw err;
   }
 }

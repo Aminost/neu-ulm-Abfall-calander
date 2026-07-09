@@ -156,12 +156,17 @@ npm run dev                # starts on http://localhost:3001
 ```
 
 > **Works with or without an API key.** If `AI_API_KEY` is unset, the server runs
-> in **offline heuristic mode**: it still detects deadlines, costs, payments and
-> critical notices in German/English text & PDF documents, highlights them, builds
-> the knowledge graph, and answers questions with sources — entirely locally, no
-> network. Add a key to unlock vision OCR of *photos* and richer, free-form chat
-> answers. This means the app is usable the moment you start it; the model is an
-> upgrade, not a hard dependency.
+> in **offline mode** — entirely local, no network:
+> - **Scanned photos are OCR'd on-device** with a bundled Tesseract engine
+>   (German + English language data ships in `server/tessdata/`), so *scanning
+>   still works with no key*.
+> - Deadlines, costs, payments and critical notices are detected & highlighted;
+>   the knowledge graph is built; chat answers are grounded and **cited**.
+>
+> Add a key to swap the local OCR/analysis for the **vision model** (better on
+> messy real-world scans) and richer free-form chat. The model is an upgrade, not
+> a hard dependency — the app is fully usable the moment you start it, and if the
+> gateway is ever unreachable it automatically falls back to the offline path.
 
 **Verify your AI setup with the real model** (needs your key in `.env`):
 

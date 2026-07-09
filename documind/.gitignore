@@ -27,3 +27,6 @@ npm-debug.*
 *.log
 
 dist-android/
+
+# Tesseract runtime cache (decompressed from the committed .gz)
+server/tessdata/*.traineddata

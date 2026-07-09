@@ -7,7 +7,9 @@
 // Run as part of:  npm test
 
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { after, test } from "node:test";
 
 // Guarantee offline mode regardless of the developer's shell env.
 delete process.env.AI_API_KEY;
@@ -161,4 +163,26 @@ test("answerQuestionStream works offline (no API key) and streams tokens", async
     (d) => (acc += d),
   );
   assert.match(acc, /2026-08-15/);
+});
+
+// ── Offline OCR: a PHOTOGRAPHED document is read locally (no model, no network) ──
+
+const ocr = await import("./ocr.js");
+after(() => ocr.terminateOcr());
+
+test("offline OCR reads a scanned invoice image and feeds the analyzer", async () => {
+  const png = readFileSync(fileURLToPath(new URL("./fixtures/invoice.png", import.meta.url)));
+  const text = await ocrImages_(png);
+  assert.match(text, /Stadtwerke/i, "OCR should read the sender");
+  assert.match(text, /149,90/, "OCR should read the amount");
+
+  // Full offline scan pipeline: analyzeDocument with an image and no key.
+  const analysis = await ai.analyzeDocument({ imageBase64: png.toString("base64"), mimeType: "image/png" });
+  assert.equal(analysis.category, "Utilities");
+  assert.ok(analysis.highlights.some((h) => h.type === "payment" && /149,90/.test(h.amount ?? "")));
+  assert.ok(analysis.highlights.some((h) => h.type === "deadline"));
+
+  async function ocrImages_(buf: Buffer): Promise<string> {
+    return ocr.ocrImages([buf.toString("base64")], "image/png");
+  }
 });
