@@ -16,7 +16,13 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { CameraModal } from "../../src/components/CameraModal";
 import { Card, ScreenTitle } from "../../src/components/ui";
-import { analyzeImage, analyzeImages, analyzeText, upsertDocument } from "../../src/api/client";
+import {
+  analyzeImage,
+  analyzeImages,
+  analyzeText,
+  uploadBlob,
+  upsertDocument,
+} from "../../src/api/client";
 import { scheduleDeadlineReminders } from "../../src/lib/notifications";
 import { newId, persistFile, saveDocument } from "../../src/lib/storage";
 import {
@@ -78,6 +84,9 @@ export default function ScanScreen() {
     upsertDocument({ id, title: analysis.title, createdAt: record.createdAt, analysis }).catch(
       () => {},
     );
+    // Back up the original scan so it can be restored on another device.
+    if (storedPdf) uriToBase64(storedPdf).then((b) => uploadBlob(id, "pdf", b)).catch(() => {});
+    if (storedImg) uriToBase64(storedImg).then((b) => uploadBlob(id, "image", b)).catch(() => {});
     // Set on-device reminders for any detected deadlines.
     scheduleDeadlineReminders(record).catch(() => {});
     reset();

@@ -90,6 +90,23 @@ export async function deleteServerDocument(docId: string): Promise<void> {
   await request("/api/documents/delete", { docId });
 }
 
+export type BlobKind = "pdf" | "image";
+
+/** Back up the original scan (PDF or page image) so it can be restored elsewhere. */
+export async function uploadBlob(docId: string, kind: BlobKind, base64: string): Promise<void> {
+  await request("/api/blob", { docId, kind, base64 });
+}
+
+/** Download a backed-up scan; returns null if the backend has none. */
+export async function fetchBlob(docId: string, kind: BlobKind): Promise<string | null> {
+  const url = `${await baseUrl()}/api/blob?docId=${encodeURIComponent(docId)}&kind=${kind}`;
+  const res = await fetch(url);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Server error ${res.status}`);
+  const data = (await res.json()) as { base64?: string };
+  return data.base64 ?? null;
+}
+
 /** Fetch all documents stored on the backend (for restoring on a new device). */
 export async function fetchServerDocuments(): Promise<
   { docId: string; title: string; createdAt: number; analysis: DocAnalysis }[]

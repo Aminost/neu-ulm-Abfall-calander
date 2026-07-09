@@ -199,16 +199,15 @@ Tap **Test connection** to confirm.
 
 ## Privacy
 
-- The original **page images and PDFs stay on your device** — they are never
-  uploaded or stored on the backend. (Restore brings back a document's text and
-  analysis on a new device, not the original scan image.)
-- Each document's **extracted text + analysis** is stored on **your own backend**
-  (the `server/` you run) so the knowledge-graph chat and cross-device restore
-  work. It is not sent anywhere else except your configured AI provider.
-- Page images are sent to your backend (and onward to your AI provider) at scan
-  time only for transcription.
+- Everything is stored on **your own backend** (the `server/` you run) and your
+  device — nothing goes anywhere else except your configured AI provider.
+- Each scan's **text + analysis** and the **original PDF/page image** are saved
+  to your backend so the knowledge-graph chat and full cross-device restore work
+  (Settings → Restore brings back the actual documents, not just the text).
+- Page images are sent to your AI provider only at scan time, for transcription.
+  For chat, only the retrieved passages relevant to your question are sent.
 - You are in full control: delete removes a document from the device **and** the
-  backend.
+  backend (text, analysis, and the stored PDF/image).
 
 ---
 

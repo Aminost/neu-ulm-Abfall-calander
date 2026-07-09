@@ -40,6 +40,18 @@ export async function persistImage(sourceUri: string, id: string): Promise<strin
   return persistFile(sourceUri, id, ext);
 }
 
+/** Write base64 content (e.g. a restored blob) to a local file. Returns its uri ("" on web). */
+export async function writeBase64File(base64: string, id: string, ext: string): Promise<string> {
+  try {
+    await ensureDir();
+    const dest = `${IMAGE_DIR}${id}.${ext}`;
+    await FileSystem.writeAsStringAsync(dest, base64, { encoding: "base64" });
+    return dest;
+  } catch {
+    return ""; // unsupported (e.g. web)
+  }
+}
+
 export async function listDocuments(): Promise<DocumentRecord[]> {
   const raw = await AsyncStorage.getItem(INDEX_KEY);
   if (!raw) return [];
@@ -90,10 +102,10 @@ export async function deleteDocument(id: string): Promise<void> {
  */
 export async function mergeRestored(
   remote: { docId: string; title: string; createdAt: number; analysis: DocumentRecord["analysis"] }[],
-): Promise<number> {
+): Promise<string[]> {
   const local = await listDocuments();
   const have = new Set(local.map((d) => d.id));
-  let added = 0;
+  const added: string[] = [];
   for (const r of remote) {
     if (have.has(r.docId)) continue;
     local.push({
@@ -102,9 +114,9 @@ export async function mergeRestored(
       status: "ready",
       analysis: r.analysis,
     });
-    added += 1;
+    added.push(r.docId);
   }
-  if (added > 0) await writeAll(local);
+  if (added.length > 0) await writeAll(local);
   return added;
 }
 

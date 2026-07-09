@@ -3,10 +3,13 @@ import cors from "cors";
 import express from "express";
 import { analyzeDocument, answerQuestion, embedTexts, MODEL, type DocAnalysis } from "./ai.js";
 import {
+  type BlobKind,
   chunkText,
   factsSheet,
   listDocs,
+  readBlob,
   removeDoc,
+  saveBlob,
   search,
   setChunks,
   upsertDoc,
@@ -91,6 +94,38 @@ app.post(
     const { docId } = req.body ?? {};
     if (docId) removeDoc(docId);
     res.json({ ok: true });
+  }),
+);
+
+// Store / fetch the original scan (PDF or page image) for full cross-device restore.
+app.post(
+  "/api/blob",
+  asyncRoute(async (req, res) => {
+    const { docId, kind, base64 } = req.body ?? {};
+    if (!docId || (kind !== "pdf" && kind !== "image") || typeof base64 !== "string") {
+      res.status(400).json({ error: "Provide docId, kind ('pdf'|'image'), and base64." });
+      return;
+    }
+    saveBlob(docId, kind as BlobKind, base64);
+    res.json({ ok: true });
+  }),
+);
+
+app.get(
+  "/api/blob",
+  asyncRoute(async (req, res) => {
+    const docId = String(req.query.docId ?? "");
+    const kind = String(req.query.kind ?? "");
+    if (!docId || (kind !== "pdf" && kind !== "image")) {
+      res.status(400).json({ error: "Provide docId and kind ('pdf'|'image')." });
+      return;
+    }
+    const base64 = readBlob(docId, kind as BlobKind);
+    if (!base64) {
+      res.status(404).json({ error: "not found" });
+      return;
+    }
+    res.json({ base64 });
   }),
 );
 

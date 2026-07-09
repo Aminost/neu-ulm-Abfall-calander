@@ -1,10 +1,17 @@
 import { CheckCircle2, CloudDownload, Server, XCircle } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button, Card, ScreenTitle } from "../../src/components/ui";
-import { checkHealth, fetchServerDocuments } from "../../src/api/client";
-import { getSettings, mergeRestored, saveSettings } from "../../src/lib/storage";
+import { checkHealth, fetchBlob, fetchServerDocuments } from "../../src/api/client";
+import {
+  getDocument,
+  getSettings,
+  mergeRestored,
+  saveDocument,
+  saveSettings,
+  writeBase64File,
+} from "../../src/lib/storage";
 import { colors, font, radius, spacing } from "../../src/lib/theme";
 
 type Health = { state: "idle" | "checking" | "ok" | "fail"; detail?: string };
@@ -19,11 +26,36 @@ export default function SettingsScreen() {
     setRestoring(true);
     try {
       const remote = await fetchServerDocuments();
-      const added = await mergeRestored(remote);
+      const addedIds = await mergeRestored(remote);
+
+      // Pull down the original scans (PDF + page image) for restored docs.
+      if (Platform.OS !== "web") {
+        for (const docId of addedIds) {
+          try {
+            const pdf = await fetchBlob(docId, "pdf");
+            const img = await fetchBlob(docId, "image");
+            const pdfUri = pdf ? await writeBase64File(pdf, docId, "pdf") : "";
+            const imageUri = img ? await writeBase64File(img, docId, "jpg") : "";
+            if (pdfUri || imageUri) {
+              const d = await getDocument(docId);
+              if (d) {
+                await saveDocument({
+                  ...d,
+                  pdfUri: pdfUri || d.pdfUri,
+                  imageUri: imageUri || d.imageUri,
+                });
+              }
+            }
+          } catch {
+            /* skip a blob that fails; text/analysis already restored */
+          }
+        }
+      }
+
       Alert.alert(
         "Restore complete",
-        added > 0
-          ? `Added ${added} document${added === 1 ? "" : "s"} from the backend.`
+        addedIds.length > 0
+          ? `Added ${addedIds.length} document${addedIds.length === 1 ? "" : "s"} from the backend.`
           : "Your library is already up to date.",
       );
     } catch (e) {

@@ -7,7 +7,7 @@
 //                        facts (deadlines, payments, entities) — the knowledge
 //                        graph — not just raw text.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { DocAnalysis } from "./ai.js";
@@ -16,6 +16,33 @@ const here = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(here, "..", "data");
 const STORE_PATH = join(DATA_DIR, "vectorstore.json");
 const DOCS_PATH = join(DATA_DIR, "documents.json");
+const BLOB_DIR = join(DATA_DIR, "blobs");
+
+export type BlobKind = "pdf" | "image";
+
+function blobFile(docId: string, kind: BlobKind): string {
+  return join(BLOB_DIR, `${docId}.${kind === "pdf" ? "pdf" : "jpg"}`);
+}
+
+/** Store the original scan (PDF or page image) so it can be restored elsewhere. */
+export function saveBlob(docId: string, kind: BlobKind, base64: string): void {
+  if (!existsSync(BLOB_DIR)) mkdirSync(BLOB_DIR, { recursive: true });
+  writeFileSync(blobFile(docId, kind), Buffer.from(base64, "base64"));
+}
+
+export function readBlob(docId: string, kind: BlobKind): string | null {
+  try {
+    return readFileSync(blobFile(docId, kind)).toString("base64");
+  } catch {
+    return null;
+  }
+}
+
+function removeBlobs(docId: string): void {
+  for (const kind of ["pdf", "image"] as BlobKind[]) {
+    rmSync(blobFile(docId, kind), { force: true });
+  }
+}
 
 export interface Chunk {
   docId: string;
@@ -64,6 +91,7 @@ export function listDocs(): StoredDoc[] {
 export function removeDoc(docId: string): void {
   docs = docs.filter((d) => d.docId !== docId);
   chunks = chunks.filter((c) => c.docId !== docId);
+  removeBlobs(docId);
   persist();
 }
 
