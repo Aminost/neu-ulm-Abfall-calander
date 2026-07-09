@@ -91,6 +91,15 @@ test("toIsoDate normalizes common real-world date formats", () => {
   assert.equal(ai.toIsoDate(undefined), undefined);
 });
 
+test("extractAmount / extractDate recover fields from text", () => {
+  assert.equal(ai.extractAmount("Offener Betrag 149,90 EUR bitte zahlen"), "149,90 EUR");
+  assert.equal(ai.extractAmount("Total: €1.299,00 due"), "€1.299,00");
+  assert.equal(ai.extractAmount("no money here"), undefined);
+  assert.equal(ai.extractDate("Please pay by 15.08.2026 at the latest"), "2026-08-15");
+  assert.equal(ai.extractDate("due 2026-08-15"), "2026-08-15");
+  assert.equal(ai.extractDate("sometime soon"), undefined);
+});
+
 test("analyze: OCR JSON is parsed and highlights normalized", async () => {
   const a = await ai.analyzeDocument({ text: "some invoice text" });
   assert.equal(a.title, "Stadtwerke Rechnung");

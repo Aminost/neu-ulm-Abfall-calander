@@ -210,6 +210,20 @@ export function toIsoDate(v: unknown): string | undefined {
   return undefined;
 }
 
+/** Find the first currency amount in text (European or symbol-first), e.g. "149,90 EUR", "€149.90". */
+export function extractAmount(text: string): string | undefined {
+  const m = text.match(
+    /(?:€|EUR|CHF|\$)\s?\d[\d.\s]*(?:,\d{2})?|\d[\d.\s]*(?:[.,]\d{2})?\s?(?:€|EUR|CHF)/i,
+  );
+  return m ? m[0].replace(/\s+/g, " ").trim() : undefined;
+}
+
+/** Find the first date in text and normalize it to ISO. */
+export function extractDate(text: string): string | undefined {
+  const m = text.match(/\d{4}-\d{2}-\d{2}|\d{1,2}[.\/-]\d{1,2}[.\/-]\d{4}/);
+  return m ? toIsoDate(m[0]) : undefined;
+}
+
 let highlightCounter = 0;
 function normalize(parsed: any): DocAnalysis {
   const arr = (v: any): any[] => (Array.isArray(v) ? v : []);
@@ -218,14 +232,22 @@ function normalize(parsed: any): DocAnalysis {
 
   const highlights: Highlight[] = arr(parsed.highlights)
     .filter((h) => h && validTypes.includes(h.type))
-    .map((h) => ({
-      id: `h${Date.now().toString(36)}${highlightCounter++}`,
-      type: h.type,
-      text: String(h.text ?? "").trim(),
-      date: toIsoDate(h.date),
-      amount: h.amount ? String(h.amount) : undefined,
-      severity: validSev.includes(h.severity) ? h.severity : "medium",
-    }))
+    .map((h) => {
+      const text = String(h.text ?? "").trim();
+      let date = toIsoDate(h.date);
+      let amount = h.amount ? String(h.amount).trim() : undefined;
+      // Backfill from the highlight's text when the model omitted the field.
+      if (h.type === "deadline" && !date) date = extractDate(text);
+      if (h.type === "payment" && !amount) amount = extractAmount(text);
+      return {
+        id: `h${Date.now().toString(36)}${highlightCounter++}`,
+        type: h.type as HighlightType,
+        text,
+        date,
+        amount,
+        severity: (validSev.includes(h.severity) ? h.severity : "medium") as Severity,
+      };
+    })
     .filter((h) => h.text);
 
   const category = CATEGORIES.includes(parsed.category) ? parsed.category : "Other";
