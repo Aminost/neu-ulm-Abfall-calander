@@ -10,6 +10,7 @@ import {
   CreditCard,
   FileDown,
   Flag,
+  MessageSquareText,
   Pencil,
   Plus,
   Share2,
@@ -31,6 +32,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Card, Pill } from "../../src/components/ui";
 import { deleteServerDocument, upsertDocument } from "../../src/api/client";
+import { setPendingQuestion } from "../../src/lib/chatBridge";
 import { rescheduleAll } from "../../src/lib/notifications";
 import { savePdfToDevice } from "../../src/lib/scanner";
 import { deleteDocument, getDocument, listDocuments, saveDocument } from "../../src/lib/storage";
@@ -140,6 +142,14 @@ export default function DocumentDetail() {
     } catch (e) {
       Alert.alert("Couldn't save PDF", e instanceof Error ? e.message : String(e));
     }
+  }
+
+  function askAboutDoc() {
+    if (!doc) return;
+    setPendingQuestion(
+      `Regarding "${doc.analysis.title || "this document"}": what are the deadlines, payments, and required actions? Answer with details and cite the source.`,
+    );
+    router.push("/chat");
   }
 
   function confirmDelete() {
@@ -255,6 +265,14 @@ export default function DocumentDetail() {
             </Pressable>
           </View>
         ) : null}
+
+        <Pressable
+          onPress={askAboutDoc}
+          style={({ pressed }) => [styles.askBtn, pressed && { opacity: 0.9 }]}
+        >
+          <MessageSquareText color={colors.white} size={18} />
+          <Text style={styles.askBtnText}>Ask about this document</Text>
+        </Pressable>
 
         {analysis.summary ? (
           <Card style={{ marginTop: spacing.md }}>
@@ -496,6 +514,17 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   pdfBtnText: { fontSize: font.small, fontWeight: "700", color: colors.accent },
+  askBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.accent,
+    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    marginTop: spacing.md,
+  },
+  askBtnText: { color: colors.white, fontWeight: "700", fontSize: font.body },
   sectionLabel: {
     fontSize: font.tiny,
     fontWeight: "700",

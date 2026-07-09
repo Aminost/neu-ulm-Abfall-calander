@@ -1,11 +1,12 @@
 import React from "react";
 import { useFocusEffect, useRouter } from "expo-router";
-import { FileText, Share2, X } from "lucide-react-native";
+import { FileText, MessageSquareText, Share2, X } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Circle, Line, Text as SvgText } from "react-native-svg";
 import { Card, EmptyState, ScreenTitle } from "../../src/components/ui";
+import { setPendingQuestion } from "../../src/lib/chatBridge";
 import { documentsForEntity } from "../../src/lib/libraryLogic";
 import { listDocuments } from "../../src/lib/storage";
 import { colors, font, spacing } from "../../src/lib/theme";
@@ -177,6 +178,16 @@ export default function GraphScreen() {
                     <X color={colors.textMuted} size={18} />
                   </Pressable>
                 </View>
+                <Pressable
+                  onPress={() => {
+                    setPendingQuestion(`What do my documents say about ${selected}? Include any deadlines, amounts and required actions, with sources.`);
+                    router.push("/chat");
+                  }}
+                  style={({ pressed }) => [styles.askEntity, pressed && { opacity: 0.9 }]}
+                >
+                  <MessageSquareText color={colors.white} size={16} />
+                  <Text style={styles.askEntityText}>Ask about this</Text>
+                </Pressable>
                 {relatedDocs.length === 0 ? (
                   <Text style={styles.selEmpty}>No documents reference this entity.</Text>
                 ) : (
@@ -240,4 +251,14 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   selDoc: { fontSize: font.body, color: colors.text, flex: 1 },
+  askEntity: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.accent,
+    borderRadius: 10,
+    paddingVertical: spacing.sm,
+  },
+  askEntityText: { color: colors.white, fontWeight: "700", fontSize: font.small },
 });

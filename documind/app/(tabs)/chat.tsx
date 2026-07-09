@@ -1,6 +1,6 @@
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { Bot, CornerDownLeft, Sparkles, User } from "lucide-react-native";
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { askQuestion, askQuestionStream } from "../../src/api/client";
+import { takePendingQuestion } from "../../src/lib/chatBridge";
 import { newId } from "../../src/lib/storage";
 import { colors, font, radius, spacing } from "../../src/lib/theme";
 import type { ChatMessage } from "../../src/lib/types";
@@ -31,6 +32,15 @@ export default function ChatScreen() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
+
+  // Consume a question handed off from another screen (document detail / graph).
+  useFocusEffect(
+    useCallback(() => {
+      const q = takePendingQuestion();
+      if (q) send(q);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  );
 
   async function send(text: string) {
     const q = text.trim();
