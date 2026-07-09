@@ -1,5 +1,6 @@
 import { Tabs } from "expo-router";
 import {
+  CalendarClock,
   Files,
   MessageSquareText,
   ScanLine,
@@ -30,6 +31,13 @@ export default function TabsLayout() {
         options={{
           title: "Library",
           tabBarIcon: ({ color, size }) => <Files color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="agenda"
+        options={{
+          title: "Agenda",
+          tabBarIcon: ({ color, size }) => <CalendarClock color={color} size={size} />,
         }}
       />
       <Tabs.Screen
