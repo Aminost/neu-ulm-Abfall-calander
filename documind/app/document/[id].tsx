@@ -11,6 +11,7 @@ import {
   FileDown,
   Flag,
   Pencil,
+  Share2,
   Trash2,
   Zap,
 } from "lucide-react-native";
@@ -28,6 +29,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Card, Pill } from "../../src/components/ui";
 import { deleteServerDocument, upsertDocument } from "../../src/api/client";
+import { savePdfToDevice } from "../../src/lib/scanner";
 import { deleteDocument, getDocument, saveDocument } from "../../src/lib/storage";
 import {
   colors,
@@ -95,6 +97,17 @@ export default function DocumentDetail() {
       }
     } catch (e) {
       Alert.alert("Couldn't open PDF", e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function savePdf() {
+    if (!doc?.pdfUri) return;
+    try {
+      const name = `${(doc.analysis.title || "document").replace(/[^\w\-]+/g, "_")}.pdf`;
+      const result = await savePdfToDevice(doc.pdfUri, name);
+      if (result === "saved") Alert.alert("Saved", "PDF saved to the folder you chose.");
+    } catch (e) {
+      Alert.alert("Couldn't save PDF", e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -194,13 +207,22 @@ export default function DocumentDetail() {
         </View>
 
         {doc.pdfUri ? (
-          <Pressable
-            onPress={openPdf}
-            style={({ pressed }) => [styles.pdfBtn, pressed && { opacity: 0.9 }]}
-          >
-            <FileDown color={colors.accent} size={18} />
-            <Text style={styles.pdfBtnText}>Open / share PDF</Text>
-          </Pressable>
+          <View style={styles.pdfRow}>
+            <Pressable
+              onPress={savePdf}
+              style={({ pressed }) => [styles.pdfBtn, pressed && { opacity: 0.9 }]}
+            >
+              <FileDown color={colors.accent} size={18} />
+              <Text style={styles.pdfBtnText}>Save PDF</Text>
+            </Pressable>
+            <Pressable
+              onPress={openPdf}
+              style={({ pressed }) => [styles.pdfBtn, pressed && { opacity: 0.9 }]}
+            >
+              <Share2 color={colors.accent} size={18} />
+              <Text style={styles.pdfBtnText}>Share</Text>
+            </Pressable>
+          </View>
         ) : null}
 
         {analysis.summary ? (
@@ -334,18 +356,19 @@ const styles = StyleSheet.create({
   catChipText: { fontSize: font.small, color: colors.textMuted, fontWeight: "600" },
   metaRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, flexWrap: "wrap" },
   date: { fontSize: font.small, color: colors.textFaint },
+  pdfRow: { flexDirection: "row", gap: spacing.md, marginTop: spacing.md },
   pdfBtn: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: spacing.sm,
-    alignSelf: "flex-start",
-    marginTop: spacing.md,
     backgroundColor: colors.accentSoft,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.md,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
   },
   pdfBtnText: { fontSize: font.small, fontWeight: "700", color: colors.accent },
   sectionLabel: {

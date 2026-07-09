@@ -8,6 +8,7 @@
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "test": "node --import tsx --test src/pipeline.test.ts",
+    "smoke": "tsx src/smoke.ts",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {

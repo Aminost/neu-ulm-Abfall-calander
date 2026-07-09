@@ -11,6 +11,7 @@
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
 import { Platform } from "react-native";
 import { getNativeScanner } from "./nativeScanner";
 
@@ -44,6 +45,36 @@ export async function uriToBase64(uri: string): Promise<string> {
     });
   }
   return FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+}
+
+export type SaveResult = "saved" | "shared" | "cancelled";
+
+/**
+ * Save a PDF to a user-chosen location. On Android, prompts for a folder
+ * (Downloads, Documents, …) via the Storage Access Framework and writes the
+ * file there — the "target location". On iOS/web, opens the share sheet so the
+ * user can save to Files / Drive / Download.
+ */
+export async function savePdfToDevice(pdfUri: string, filename: string): Promise<SaveResult> {
+  if (Platform.OS === "android") {
+    const perm = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+    if (!perm.granted) return "cancelled";
+    const b64 = await uriToBase64(pdfUri);
+    const target = await FileSystem.StorageAccessFramework.createFileAsync(
+      perm.directoryUri,
+      filename.replace(/\.pdf$/i, ""),
+      "application/pdf",
+    );
+    await FileSystem.writeAsStringAsync(target, b64, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    return "saved";
+  }
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(pdfUri, { mimeType: "application/pdf", UTI: "com.adobe.pdf" });
+    return "shared";
+  }
+  throw new Error("Saving PDFs isn't supported on this platform.");
 }
 
 /** Read any uri as text (platform-safe). */

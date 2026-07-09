@@ -31,6 +31,7 @@ a knowledge graph.
 | **Knowledge graph** | Entities (people, organizations, amounts, dates) extracted from your documents, linked by how they relate. |
 | **Deadline alerts** | On-device reminders are scheduled automatically for detected deadlines (2 days before + on the day), so bureaucratic due-dates don't slip. Tapping a reminder opens the document. |
 | **Organize** | Full-text search across titles, amounts and names; filter by category; rename and re-categorize any document. |
+| **Save as PDF** | Scans become a PDF you can save to a folder you choose (Android Storage Access Framework) or share to Files/Drive. |
 | **Access anywhere** | Documents are stored on your backend as they're scanned; a new device can restore the whole library (Settings → Restore). |
 
 ### A note on the OCR “new approach”
@@ -147,6 +148,19 @@ cp .env.example .env       # then fill in AI_API_KEY (and AI_BASE_URL for kit.ai
 npm install
 npm run dev                # starts on http://localhost:3001
 ```
+
+**Verify your AI setup with the real model** (needs your key in `.env`):
+
+```bash
+cd server
+npm run smoke              # analyzes a sample invoice against your configured model
+```
+
+This runs the whole pipeline against your **real** backend — analyze → extract
+deadlines/payments → knowledge-graph facts → a cited chat answer — and prints a
+✅/⚠ verdict. It's the one end-to-end check that needs your API key, so run it
+once after configuring `.env` to confirm the model works before using the app.
+(The offline suite `npm test` covers the same flow with a mocked model.)
 
 `.env` keys (defaults are set for the **KIT ki-toolbox**):
 
