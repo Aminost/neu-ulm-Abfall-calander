@@ -16,6 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Badge, Card, EmptyState, Pill, ScreenTitle } from "../../src/components/ui";
 import { fetchServerDocuments } from "../../src/api/client";
 import { dashboardStats } from "../../src/lib/agendaLogic";
+import { documentCategories, filterDocuments } from "../../src/lib/libraryLogic";
 import { getSettings, listDocuments, mergeRestored } from "../../src/lib/storage";
 import { colors, font, radius, severityWeight, spacing } from "../../src/lib/theme";
 import type { DocumentRecord, Highlight } from "../../src/lib/types";
@@ -42,28 +43,8 @@ export default function LibraryScreen() {
     });
   }, [router]);
 
-  const categories = useMemo(
-    () => [...new Set(docs.map((d) => d.analysis.category))].sort(),
-    [docs],
-  );
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return docs.filter((d) => {
-      if (cat && d.analysis.category !== cat) return false;
-      if (!q) return true;
-      const hay = [
-        d.analysis.title,
-        d.analysis.summary,
-        d.analysis.category,
-        ...d.analysis.highlights.map((h) => h.text),
-        ...d.analysis.entities.map((e) => e.name),
-      ]
-        .join(" ")
-        .toLowerCase();
-      return hay.includes(q);
-    });
-  }, [docs, query, cat]);
+  const categories = useMemo(() => documentCategories(docs), [docs]);
+  const filtered = useMemo(() => filterDocuments(docs, query, cat), [docs, query, cat]);
 
   const load = useCallback(async () => {
     setDocs(await listDocuments());
