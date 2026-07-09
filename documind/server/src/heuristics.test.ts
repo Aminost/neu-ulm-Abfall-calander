@@ -85,6 +85,14 @@ test("heuristicAnalyze extracts payment, deadline, critical + graph from a real 
   assert.ok(a.relations.some((r) => r.label === "owes" || r.label === "due"));
 });
 
+test("cue matching is umlaut-insensitive (fällig == faellig)", () => {
+  // Umlaut-stripped German (common in typed docs / lossy OCR) must still work.
+  const a = heuristicAnalyze("Der Betrag von 80,00 EUR ist faellig am 01.09.2026.", FIXED_TODAY);
+  const deadline = a.highlights.find((h) => h.type === "deadline");
+  assert.ok(deadline, "faellig should be recognized as a deadline cue");
+  assert.equal(deadline!.date, "2026-09-01");
+});
+
 test("heuristicAnalyze resolves a relative deadline against today", () => {
   const a = heuristicAnalyze("Bitte zahlen Sie den Betrag von 50,00 EUR innerhalb von 14 Tagen.", FIXED_TODAY);
   const deadline = a.highlights.find((h) => h.type === "deadline");

@@ -51,9 +51,20 @@ const ACTION_CUES = [
   "vorlegen", "einreichen", "termin vereinbaren", "antwort", "reply",
 ];
 
+/** Fold German umlauts to ASCII (ä→ae …) so cues match text whether or not the
+ * document (or its OCR) preserved umlauts — "fällig" and "faellig" both hit. */
+export function deumlaut(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss");
+}
+
 function includesAny(haystack: string, needles: string[]): string | undefined {
-  const low = haystack.toLowerCase();
-  for (const n of needles) if (low.includes(n)) return n;
+  const low = deumlaut(haystack);
+  for (const n of needles) if (low.includes(deumlaut(n))) return n;
   return undefined;
 }
 
@@ -106,9 +117,9 @@ export function extractDates(text: string, today = new Date()): string[] {
 const SPECIALIZED = ["Insurance", "Utilities", "Government", "Medical", "Legal", "Work", "Education"];
 
 export function classify(text: string): string {
-  const low = text.toLowerCase();
+  const low = deumlaut(text);
   const score = (cat: string): number =>
-    CATEGORY_KEYWORDS[cat].reduce((n, w) => n + (low.split(w).length - 1), 0);
+    CATEGORY_KEYWORDS[cat].reduce((n, w) => n + (low.split(deumlaut(w)).length - 1), 0);
 
   let best = "";
   let bestScore = 0;
