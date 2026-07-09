@@ -1,10 +1,10 @@
-import { CheckCircle2, Server, XCircle } from "lucide-react-native";
+import { CheckCircle2, CloudDownload, Server, XCircle } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button, Card, ScreenTitle } from "../../src/components/ui";
-import { checkHealth } from "../../src/api/client";
-import { getSettings, saveSettings } from "../../src/lib/storage";
+import { checkHealth, fetchServerDocuments } from "../../src/api/client";
+import { getSettings, mergeRestored, saveSettings } from "../../src/lib/storage";
 import { colors, font, radius, spacing } from "../../src/lib/theme";
 
 type Health = { state: "idle" | "checking" | "ok" | "fail"; detail?: string };
@@ -13,6 +13,25 @@ export default function SettingsScreen() {
   const [apiUrl, setApiUrl] = useState("");
   const [saved, setSaved] = useState(false);
   const [health, setHealth] = useState<Health>({ state: "idle" });
+  const [restoring, setRestoring] = useState(false);
+
+  async function restore() {
+    setRestoring(true);
+    try {
+      const remote = await fetchServerDocuments();
+      const added = await mergeRestored(remote);
+      Alert.alert(
+        "Restore complete",
+        added > 0
+          ? `Added ${added} document${added === 1 ? "" : "s"} from the backend.`
+          : "Your library is already up to date.",
+      );
+    } catch (e) {
+      Alert.alert("Restore failed", e instanceof Error ? e.message : String(e));
+    } finally {
+      setRestoring(false);
+    }
+  }
 
   useEffect(() => {
     getSettings().then((s) => setApiUrl(s.apiUrl));
@@ -88,6 +107,23 @@ export default function SettingsScreen() {
               <Text style={[styles.statusText, { color: colors.critical }]}>{health.detail}</Text>
             </View>
           )}
+        </Card>
+
+        <Card style={{ marginTop: spacing.md, gap: spacing.md }}>
+          <View style={styles.labelRow}>
+            <CloudDownload color={colors.accent} size={18} />
+            <Text style={styles.label}>Sync</Text>
+          </View>
+          <Text style={styles.hint}>
+            Documents are stored on your backend as they're scanned. On a new device, restore your
+            library (titles, analysis, deadlines and text) from there.
+          </Text>
+          <Button
+            label="Restore from backend"
+            onPress={restore}
+            variant="secondary"
+            loading={restoring}
+          />
         </Card>
 
         <Card style={{ marginTop: spacing.md }}>

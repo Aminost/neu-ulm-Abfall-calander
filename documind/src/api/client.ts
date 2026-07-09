@@ -68,17 +68,39 @@ export async function analyzeText(text: string): Promise<DocAnalysis> {
   return analysis;
 }
 
-/** Index a document's text into the RAG store so the chatbot can use it. */
-export async function indexDocument(
-  docId: string,
-  title: string,
-  text: string,
-): Promise<void> {
-  await request("/api/index", { docId, title, text });
+/**
+ * Store a document on the backend: its analysis (for the knowledge graph + chat)
+ * and text (for retrieval). Also makes it available to other devices via restore.
+ */
+export async function upsertDocument(doc: {
+  id: string;
+  title: string;
+  createdAt: number;
+  analysis: DocAnalysis;
+}): Promise<void> {
+  await request("/api/documents", {
+    docId: doc.id,
+    title: doc.title,
+    createdAt: doc.createdAt,
+    analysis: doc.analysis,
+  });
 }
 
-export async function removeFromIndex(docId: string): Promise<void> {
-  await request("/api/index/delete", { docId });
+export async function deleteServerDocument(docId: string): Promise<void> {
+  await request("/api/documents/delete", { docId });
+}
+
+/** Fetch all documents stored on the backend (for restoring on a new device). */
+export async function fetchServerDocuments(): Promise<
+  { docId: string; title: string; createdAt: number; analysis: DocAnalysis }[]
+> {
+  const url = (await baseUrl()) + "/api/documents";
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Server error ${res.status}`);
+  const data = (await res.json()) as {
+    documents: { docId: string; title: string; createdAt: number; analysis: DocAnalysis }[];
+  };
+  return data.documents;
 }
 
 export async function askQuestion(

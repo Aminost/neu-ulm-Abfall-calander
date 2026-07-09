@@ -1,8 +1,16 @@
 import "dotenv/config";
 import cors from "cors";
 import express from "express";
-import { analyzeDocument, answerQuestion, embedTexts, MODEL } from "./ai.js";
-import { addDocument, chunkText, removeDocument, search } from "./store.js";
+import { analyzeDocument, answerQuestion, embedTexts, MODEL, type DocAnalysis } from "./ai.js";
+import {
+  chunkText,
+  factsSheet,
+  listDocs,
+  removeDoc,
+  search,
+  setChunks,
+  upsertDoc,
+} from "./store.js";
 
 const app = express();
 app.use(cors());
@@ -23,7 +31,7 @@ function asyncRoute(
 }
 
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, model: MODEL, hasKey: Boolean(process.env.AI_API_KEY) });
+  res.json({ ok: true, model: MODEL, hasKey: Boolean(process.env.AI_API_KEY), documents: listDocs().length });
 });
 
 // OCR + classify + extract + knowledge graph, in one pass.
@@ -40,41 +48,53 @@ app.post(
   }),
 );
 
-// Index a document's text for retrieval-augmented chat.
+// Upsert a document: store its metadata/analysis (cross-device + knowledge graph)
+// and index its text for retrieval.
 app.post(
-  "/api/index",
+  "/api/documents",
   asyncRoute(async (req, res) => {
-    const { docId, title, text } = req.body ?? {};
-    if (!docId || typeof text !== "string") {
-      res.status(400).json({ error: "Provide docId and text." });
+    const { docId, title, createdAt, analysis } = req.body ?? {};
+    if (!docId || !analysis) {
+      res.status(400).json({ error: "Provide docId and analysis." });
       return;
     }
-    const pieces = chunkText(text);
+    const a = analysis as DocAnalysis;
+    upsertDoc({ docId, title: title || a.title, createdAt: createdAt || Date.now(), analysis: a });
+
+    const pieces = chunkText(a.fullText || "");
     if (pieces.length === 0) {
-      removeDocument(docId);
-      res.json({ ok: true, chunks: 0 });
+      setChunks(docId, title || a.title, []);
+      res.json({ ok: true, chunks: 0, embedded: false });
       return;
     }
-    const embeddings = await embedTexts(pieces); // null when embeddings disabled/unavailable
-    addDocument(
+    const embeddings = await embedTexts(pieces); // null when embeddings unavailable
+    setChunks(
       docId,
-      title || "Untitled document",
+      title || a.title,
       pieces.map((t, i) => ({ text: t, embedding: embeddings ? embeddings[i] : null })),
     );
     res.json({ ok: true, chunks: pieces.length, embedded: embeddings !== null });
   }),
 );
 
+// Fetch all stored documents — lets a new device restore the library.
+app.get(
+  "/api/documents",
+  asyncRoute(async (_req, res) => {
+    res.json({ documents: listDocs() });
+  }),
+);
+
 app.post(
-  "/api/index/delete",
+  "/api/documents/delete",
   asyncRoute(async (req, res) => {
     const { docId } = req.body ?? {};
-    if (docId) removeDocument(docId);
+    if (docId) removeDoc(docId);
     res.json({ ok: true });
   }),
 );
 
-// Retrieval-augmented question answering.
+// Retrieval-augmented, knowledge-graph-aware question answering.
 app.post(
   "/api/chat",
   asyncRoute(async (req, res) => {
@@ -91,18 +111,14 @@ app.post(
       question,
       hits.map((h) => ({ title: h.title, text: h.text })),
       Array.isArray(history) ? history : [],
+      factsSheet(),
     );
 
-    // Deduplicate citations by document, keep the best-scoring snippet.
     const seen = new Set<string>();
     const citations = hits
       .filter((h) => (seen.has(h.docId) ? false : (seen.add(h.docId), true)))
       .slice(0, 3)
-      .map((h) => ({
-        docId: h.docId,
-        title: h.title,
-        snippet: h.text.slice(0, 140),
-      }));
+      .map((h) => ({ docId: h.docId, title: h.title, snippet: h.text.slice(0, 140) }));
 
     res.json({ answer, citations });
   }),

@@ -19,10 +19,19 @@ export const EMBED_MODEL =
     : process.env.AI_EMBED_MODEL;
 export const EMBEDDINGS_ENABLED = EMBED_MODEL.trim().length > 0;
 
+// Use a placeholder when the key is missing so the client constructs and the
+// server can still boot (health, document listing, keyword search). Real AI
+// calls check for the key and fail with a clear message.
 const client = new OpenAI({
-  apiKey: process.env.AI_API_KEY,
+  apiKey: process.env.AI_API_KEY || "MISSING_KEY",
   baseURL: process.env.AI_BASE_URL || undefined,
 });
+
+function ensureKey(): void {
+  if (!process.env.AI_API_KEY) {
+    throw new Error("AI_API_KEY is not set on the server. Add it to server/.env and restart.");
+  }
+}
 
 // ── Domain types (kept in sync with the app's src/lib/types.ts) ──────────────
 export type HighlightType = "deadline" | "payment" | "critical" | "action";
@@ -188,6 +197,7 @@ function normalize(parsed: any): DocAnalysis {
 }
 
 export async function analyzeDocument(input: AnalyzeInput): Promise<DocAnalysis> {
+  ensureKey();
   const res = await client.chat.completions.create({
     model: MODEL,
     temperature: 0.1,
@@ -220,27 +230,33 @@ export async function embedTexts(texts: string[]): Promise<number[][] | null> {
   }
 }
 
-const CHAT_SYSTEM = `You are DocuMind's assistant. Answer the user's question using ONLY the provided document excerpts.
-- Be concise and specific. Quote amounts, dates and names exactly as written.
-- If the excerpts don't contain the answer, say so plainly — do not invent facts.
-- When you use information from an excerpt, you may refer to its document by title.`;
+const CHAT_SYSTEM = `You are DocuMind's assistant — a smart companion that helps the user manage their documents, deadlines, payments and bureaucracy.
+Answer using the provided knowledge base: a FACTS overview (structured deadlines, payments, critical items and entities across all documents — the user's knowledge graph) and EXCERPTS (relevant passages from specific documents).
+- Be specific and detailed. Quote amounts, dates and names exactly as written.
+- Prefer the FACTS overview for questions about what's due, what is owed, or which documents are involved; use EXCERPTS for details and to ground your answer.
+- Always attribute information to the source document by its title.
+- If the knowledge base doesn't contain the answer, say so plainly — never invent facts.
+- When relevant, proactively surface upcoming deadlines or required payments.`;
 
 export async function answerQuestion(
   question: string,
   contexts: { title: string; text: string }[],
   history: { role: "user" | "assistant"; content: string }[],
+  facts = "",
 ): Promise<string> {
-  const contextBlock =
+  ensureKey();
+  const excerpts =
     contexts.length > 0
       ? contexts.map((c, i) => `[${i + 1}] ${c.title}\n${c.text}`).join("\n\n---\n\n")
-      : "(no documents have been digitized yet)";
+      : "(no matching excerpts)";
+  const factsBlock = facts.trim() ? facts : "(no documents digitized yet)";
 
   const messages: ChatCompletionMessageParam[] = [
     { role: "system", content: CHAT_SYSTEM },
     ...history.slice(-6),
     {
       role: "user",
-      content: `Document excerpts:\n\n${contextBlock}\n\nQuestion: ${question}`,
+      content: `FACTS overview (knowledge graph):\n${factsBlock}\n\nEXCERPTS:\n${excerpts}\n\nQuestion: ${question}`,
     },
   ];
 

@@ -83,6 +83,31 @@ export async function deleteDocument(id: string): Promise<void> {
   await writeAll(docs.filter((d) => d.id !== id));
 }
 
+/**
+ * Merge documents fetched from the backend into local storage. Existing local
+ * docs (which may have local image/PDF files) are kept; only genuinely new
+ * documents are added. Returns how many were added.
+ */
+export async function mergeRestored(
+  remote: { docId: string; title: string; createdAt: number; analysis: DocumentRecord["analysis"] }[],
+): Promise<number> {
+  const local = await listDocuments();
+  const have = new Set(local.map((d) => d.id));
+  let added = 0;
+  for (const r of remote) {
+    if (have.has(r.docId)) continue;
+    local.push({
+      id: r.docId,
+      createdAt: r.createdAt,
+      status: "ready",
+      analysis: r.analysis,
+    });
+    added += 1;
+  }
+  if (added > 0) await writeAll(local);
+  return added;
+}
+
 export async function getSettings(): Promise<Settings> {
   const raw = await AsyncStorage.getItem(SETTINGS_KEY);
   const fallback: Settings = {

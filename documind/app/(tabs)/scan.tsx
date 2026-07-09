@@ -16,7 +16,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { CameraModal } from "../../src/components/CameraModal";
 import { Card, ScreenTitle } from "../../src/components/ui";
-import { analyzeImage, analyzeImages, analyzeText, indexDocument } from "../../src/api/client";
+import { analyzeImage, analyzeImages, analyzeText, upsertDocument } from "../../src/api/client";
 import { scheduleDeadlineReminders } from "../../src/lib/notifications";
 import { newId, persistFile, saveDocument } from "../../src/lib/storage";
 import {
@@ -74,7 +74,10 @@ export default function ScanScreen() {
       analysis,
     };
     await saveDocument(record);
-    indexDocument(id, analysis.title, analysis.fullText).catch(() => {});
+    // Store on the backend (knowledge graph + retrieval + cross-device access).
+    upsertDocument({ id, title: analysis.title, createdAt: record.createdAt, analysis }).catch(
+      () => {},
+    );
     // Set on-device reminders for any detected deadlines.
     scheduleDeadlineReminders(record).catch(() => {});
     reset();

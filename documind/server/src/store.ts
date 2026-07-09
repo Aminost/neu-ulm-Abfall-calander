@@ -1,15 +1,21 @@
-// A tiny JSON-persisted store for retrieval-augmented chat. Each document's
-// text is split into overlapping chunks. When the AI gateway provides
-// embeddings, retrieval uses cosine similarity; otherwise it falls back to a
-// keyword-overlap score, so chat works even on a chat-only gateway.
+// Persistent store for retrieval-augmented chat AND cross-device access.
+//
+// Two JSON files:
+//   - vectorstore.json : text chunks (+ embeddings when available) for retrieval
+//   - documents.json   : full document metadata + analysis, so a new device can
+//                        restore the library and so chat can use structured
+//                        facts (deadlines, payments, entities) — the knowledge
+//                        graph — not just raw text.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { DocAnalysis } from "./ai.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(here, "..", "data");
 const STORE_PATH = join(DATA_DIR, "vectorstore.json");
+const DOCS_PATH = join(DATA_DIR, "documents.json");
 
 export interface Chunk {
   docId: string;
@@ -18,25 +24,78 @@ export interface Chunk {
   embedding: number[] | null;
 }
 
-let chunks: Chunk[] = load();
+export interface StoredDoc {
+  docId: string;
+  title: string;
+  createdAt: number;
+  analysis: DocAnalysis;
+}
 
-function load(): Chunk[] {
+let chunks: Chunk[] = loadJson(STORE_PATH, []);
+let docs: StoredDoc[] = loadJson(DOCS_PATH, []);
+
+function loadJson<T>(path: string, fallback: T): T {
   try {
-    if (existsSync(STORE_PATH)) {
-      return JSON.parse(readFileSync(STORE_PATH, "utf8")) as Chunk[];
-    }
+    if (existsSync(path)) return JSON.parse(readFileSync(path, "utf8")) as T;
   } catch {
-    /* corrupt store — start fresh */
+    /* corrupt — start fresh */
   }
-  return [];
+  return fallback;
 }
 
 function persist(): void {
   if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
   writeFileSync(STORE_PATH, JSON.stringify(chunks));
+  writeFileSync(DOCS_PATH, JSON.stringify(docs));
 }
 
-/** Split text into ~maxLen-char chunks with a little overlap, on sentence-ish boundaries. */
+// ── Documents ────────────────────────────────────────────────────────────────
+
+export function upsertDoc(doc: StoredDoc): void {
+  docs = docs.filter((d) => d.docId !== doc.docId);
+  docs.push(doc);
+  persist();
+}
+
+export function listDocs(): StoredDoc[] {
+  return [...docs].sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export function removeDoc(docId: string): void {
+  docs = docs.filter((d) => d.docId !== docId);
+  chunks = chunks.filter((c) => c.docId !== docId);
+  persist();
+}
+
+/**
+ * A compact "facts sheet" across the whole library: each document's deadlines,
+ * payments and critical items, plus key entities. Fed to the chat model so it
+ * can answer questions like "what do I owe / what's due" precisely, with the
+ * document title as the source.
+ */
+export function factsSheet(): string {
+  if (docs.length === 0) return "";
+  const lines: string[] = [];
+  for (const d of docs) {
+    const flags = d.analysis.highlights
+      .filter((h) => ["deadline", "payment", "critical", "action"].includes(h.type))
+      .map((h) => {
+        const bits = [h.type.toUpperCase(), h.text];
+        if (h.date) bits.push(`(due ${h.date})`);
+        if (h.amount) bits.push(`(${h.amount})`);
+        return "  - " + bits.join(" ");
+      });
+    const ents = d.analysis.entities.slice(0, 8).map((e) => `${e.name} [${e.type}]`);
+    if (flags.length === 0 && ents.length === 0) continue;
+    lines.push(`• ${d.analysis.title || "Untitled"} (${d.analysis.category}):`);
+    if (flags.length) lines.push(...flags);
+    if (ents.length) lines.push(`  entities: ${ents.join(", ")}`);
+  }
+  return lines.join("\n").slice(0, 6000);
+}
+
+// ── Chunks / retrieval ───────────────────────────────────────────────────────
+
 export function chunkText(text: string, maxLen = 900, overlap = 150): string[] {
   const clean = text.replace(/\s+\n/g, "\n").trim();
   if (clean.length <= maxLen) return clean ? [clean] : [];
@@ -54,20 +113,13 @@ export function chunkText(text: string, maxLen = 900, overlap = 150): string[] {
   return out.filter(Boolean);
 }
 
-export function removeDocument(docId: string): void {
-  chunks = chunks.filter((c) => c.docId !== docId);
-  persist();
-}
-
-export function addDocument(
+export function setChunks(
   docId: string,
   title: string,
   pieces: { text: string; embedding: number[] | null }[],
 ): void {
-  removeDocument(docId); // replace any prior version
-  for (const p of pieces) {
-    chunks.push({ docId, title, text: p.text, embedding: p.embedding });
-  }
+  chunks = chunks.filter((c) => c.docId !== docId);
+  for (const p of pieces) chunks.push({ docId, title, text: p.text, embedding: p.embedding });
   persist();
 }
 
@@ -92,7 +144,6 @@ function tokenize(s: string): string[] {
     .filter((t) => t.length > 2);
 }
 
-/** Keyword-overlap score in [0,1] — used when embeddings aren't available. */
 function lexicalScore(queryTokens: Set<string>, text: string): number {
   if (queryTokens.size === 0) return 0;
   const textTokens = new Set(tokenize(text));
@@ -105,10 +156,6 @@ export interface SearchHit extends Chunk {
   score: number;
 }
 
-/**
- * Retrieve the top-k chunks. Uses cosine similarity for chunks that have an
- * embedding (when a query embedding is supplied), and keyword overlap otherwise.
- */
 export function search(
   queryText: string,
   queryEmbedding: number[] | null,
@@ -125,8 +172,4 @@ export function search(
     })
     .sort((a, b) => b.score - a.score)
     .slice(0, k);
-}
-
-export function count(): number {
-  return chunks.length;
 }

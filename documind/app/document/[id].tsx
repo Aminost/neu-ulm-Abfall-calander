@@ -4,11 +4,13 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   ArrowLeft,
   CalendarClock,
+  Check,
   ChevronDown,
   ChevronUp,
   CreditCard,
   FileDown,
   Flag,
+  Pencil,
   Trash2,
   Zap,
 } from "lucide-react-native";
@@ -20,12 +22,13 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Card, Pill } from "../../src/components/ui";
-import { removeFromIndex } from "../../src/api/client";
-import { deleteDocument, getDocument } from "../../src/lib/storage";
+import { deleteServerDocument, upsertDocument } from "../../src/api/client";
+import { deleteDocument, getDocument, saveDocument } from "../../src/lib/storage";
 import {
   colors,
   font,
@@ -35,6 +38,7 @@ import {
   severityWeight,
   spacing,
 } from "../../src/lib/theme";
+import { CATEGORIES } from "../../src/lib/types";
 import type { DocumentRecord, Highlight, HighlightType } from "../../src/lib/types";
 
 const ICONS: Record<HighlightType, React.ComponentType<{ color: string; size: number }>> = {
@@ -49,10 +53,37 @@ export default function DocumentDetail() {
   const router = useRouter();
   const [doc, setDoc] = useState<DocumentRecord | undefined>();
   const [showText, setShowText] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editCategory, setEditCategory] = useState("");
 
   useEffect(() => {
     if (id) getDocument(id).then(setDoc);
   }, [id]);
+
+  function startEdit() {
+    if (!doc) return;
+    setEditTitle(doc.analysis.title);
+    setEditCategory(doc.analysis.category);
+    setEditing(true);
+  }
+
+  async function saveEdit() {
+    if (!doc) return;
+    const updated: DocumentRecord = {
+      ...doc,
+      analysis: { ...doc.analysis, title: editTitle.trim() || "Untitled document", category: editCategory },
+    };
+    setDoc(updated);
+    setEditing(false);
+    await saveDocument(updated);
+    upsertDocument({
+      id: updated.id,
+      title: updated.analysis.title,
+      createdAt: updated.createdAt,
+      analysis: updated.analysis,
+    }).catch(() => {});
+  }
 
   async function openPdf() {
     if (!doc?.pdfUri) return;
@@ -76,7 +107,7 @@ export default function DocumentDetail() {
         onPress: async () => {
           if (!id) return;
           await deleteDocument(id);
-          removeFromIndex(id).catch(() => {});
+          deleteServerDocument(id).catch(() => {});
           router.back();
         },
       },
@@ -102,9 +133,20 @@ export default function DocumentDetail() {
         <Pressable onPress={() => router.back()} hitSlop={12} style={styles.iconBtn}>
           <ArrowLeft color={colors.text} size={22} />
         </Pressable>
-        <Pressable onPress={confirmDelete} hitSlop={12} style={styles.iconBtn}>
-          <Trash2 color={colors.critical} size={20} />
-        </Pressable>
+        <View style={{ flexDirection: "row", gap: spacing.sm }}>
+          {editing ? (
+            <Pressable onPress={saveEdit} hitSlop={12} style={[styles.iconBtn, styles.saveBtn]}>
+              <Check color={colors.white} size={20} />
+            </Pressable>
+          ) : (
+            <Pressable onPress={startEdit} hitSlop={12} style={styles.iconBtn}>
+              <Pencil color={colors.text} size={19} />
+            </Pressable>
+          )}
+          <Pressable onPress={confirmDelete} hitSlop={12} style={styles.iconBtn}>
+            <Trash2 color={colors.critical} size={20} />
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
@@ -113,8 +155,37 @@ export default function DocumentDetail() {
         ) : null}
 
         <View style={styles.titleRow}>
-          <Text style={styles.title}>{analysis.title || "Untitled document"}</Text>
+          {editing ? (
+            <TextInput
+              style={styles.titleInput}
+              value={editTitle}
+              onChangeText={setEditTitle}
+              placeholder="Document title"
+              placeholderTextColor={colors.textFaint}
+              multiline
+            />
+          ) : (
+            <Text style={styles.title}>{analysis.title || "Untitled document"}</Text>
+          )}
         </View>
+
+        {editing ? (
+          <View style={styles.catRow}>
+            {CATEGORIES.map((c) => {
+              const active = c === editCategory;
+              return (
+                <Pressable
+                  key={c}
+                  onPress={() => setEditCategory(c)}
+                  style={[styles.catChip, active && styles.catChipActive]}
+                >
+                  <Text style={[styles.catChipText, active && { color: colors.white }]}>{c}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
+
         <View style={styles.metaRow}>
           <Pill label={analysis.category || "Other"} />
           {analysis.language ? <Pill label={analysis.language} /> : null}
@@ -238,6 +309,29 @@ const styles = StyleSheet.create({
   },
   titleRow: { marginBottom: spacing.sm },
   title: { fontSize: font.h1, fontWeight: "800", color: colors.text, lineHeight: 34 },
+  titleInput: {
+    fontSize: font.h1,
+    fontWeight: "800",
+    color: colors.text,
+    lineHeight: 34,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    backgroundColor: colors.surface,
+  },
+  saveBtn: { backgroundColor: colors.accent, borderColor: colors.accent },
+  catRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginBottom: spacing.md },
+  catChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  catChipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
+  catChipText: { fontSize: font.small, color: colors.textMuted, fontWeight: "600" },
   metaRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, flexWrap: "wrap" },
   date: { fontSize: font.small, color: colors.textFaint },
   pdfBtn: {

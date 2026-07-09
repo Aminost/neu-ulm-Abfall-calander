@@ -24,9 +24,11 @@ a knowledge graph.
 | **Classification** | Each document is sorted into a topic (Finance, Legal, Medical, Insurance, …). |
 | **Highlights** | Deadlines, payments, critical problems and required actions are extracted and flagged with a severity. |
 | **Local storage** | Document metadata + analysis live in on-device storage; page images are copied into the app's document directory. |
-| **RAG chatbot** | Ask questions; the backend retrieves the most relevant passages (vector search) and answers with citations. |
+| **RAG chatbot (graph-aware)** | Ask questions; the backend combines a structured facts overview (all deadlines/payments/entities — the knowledge graph) with retrieved passages and answers with citations to the source document. |
 | **Knowledge graph** | Entities (people, organizations, amounts, dates) extracted from your documents, linked by how they relate. |
-| **Deadline alerts** | On-device reminders are scheduled automatically for detected deadlines (2 days before + on the day), so bureaucratic due-dates don't slip. |
+| **Deadline alerts** | On-device reminders are scheduled automatically for detected deadlines (2 days before + on the day), so bureaucratic due-dates don't slip. Tapping a reminder opens the document. |
+| **Organize** | Full-text search across titles, amounts and names; filter by category; rename and re-categorize any document. |
+| **Access anywhere** | Documents are stored on your backend as they're scanned; a new device can restore the whole library (Settings → Restore). |
 
 ### A note on the OCR “new approach”
 
@@ -180,10 +182,16 @@ Tap **Test connection** to confirm.
 
 ## Privacy
 
-- Documents and their analysis are stored **locally** on the device.
+- The original **page images and PDFs stay on your device** — they are never
+  uploaded or stored on the backend. (Restore brings back a document's text and
+  analysis on a new device, not the original scan image.)
+- Each document's **extracted text + analysis** is stored on **your own backend**
+  (the `server/` you run) so the knowledge-graph chat and cross-device restore
+  work. It is not sent anywhere else except your configured AI provider.
 - Page images are sent to your backend (and onward to your AI provider) at scan
-  time for transcription. For chat, only the **retrieved text passages** relevant
-  to your question are sent — not your whole library.
+  time only for transcription.
+- You are in full control: delete removes a document from the device **and** the
+  backend.
 
 ---
 
