@@ -139,6 +139,19 @@ test("store: upsert + knowledge-graph facts sheet includes money & dates", async
   assert.equal(store.listDocs().length, 1);
 });
 
+test("meta chunk makes titles/entities/amounts searchable for citations", async () => {
+  const a = await ai.analyzeDocument({ text: "x" });
+  const meta = store.metaText(a);
+  assert.ok(meta.includes("Stadtwerke"), "meta includes title/entity");
+  assert.ok(meta.includes("149,90"), "meta includes amount");
+
+  store.setChunks("meta1", a.title, [{ text: meta, embedding: null }]);
+  // A query using the entity/topic (not present verbatim in body) still matches.
+  const hits = store.search("Stadtwerke electricity invoice", null, 5);
+  assert.ok(hits.some((h) => h.docId === "meta1"), "entity/topic query hits via meta chunk");
+  store.removeDoc("meta1");
+});
+
 test("retrieval: keyword search finds the relevant chunk", async () => {
   const hits = store.search("Kundennummer 55123", null, 5);
   assert.ok(hits.length >= 1);

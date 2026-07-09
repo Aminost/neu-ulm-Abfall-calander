@@ -14,6 +14,7 @@ import {
   chunkText,
   factsSheet,
   listDocs,
+  metaText,
   readBlob,
   removeDoc,
   saveBlob,
@@ -71,12 +72,8 @@ app.post(
     const a = analysis as DocAnalysis;
     upsertDoc({ docId, title: title || a.title, createdAt: createdAt || Date.now(), analysis: a });
 
-    const pieces = chunkText(a.fullText || "");
-    if (pieces.length === 0) {
-      setChunks(docId, title || a.title, []);
-      res.json({ ok: true, chunks: 0, embedded: false });
-      return;
-    }
+    // Meta chunk first (title/entities/amounts/dates), then the body text.
+    const pieces = [metaText(a), ...chunkText(a.fullText || "")].filter((p) => p.trim());
     const embeddings = await embedTexts(pieces); // null when embeddings unavailable
     setChunks(
       docId,

@@ -124,6 +124,29 @@ export function factsSheet(): string {
 
 // ── Chunks / retrieval ───────────────────────────────────────────────────────
 
+/**
+ * A compact per-document "meta" string (title, category, summary, key
+ * deadlines/payments, entities). Indexed as its own chunk so retrieval can match
+ * on titles, amounts, dates and entity names — not just the body text — which
+ * makes chat citations point at the right document far more reliably.
+ */
+export function metaText(a: DocAnalysis): string {
+  const hl = a.highlights
+    .map((h) => `${h.type}: ${h.text}${h.date ? ` (due ${h.date})` : ""}${h.amount ? ` ${h.amount}` : ""}`)
+    .join("; ");
+  const ents = a.entities.map((e) => e.name).join(", ");
+  return [
+    a.title,
+    a.category ? `Category: ${a.category}.` : "",
+    a.summary,
+    hl ? `Key items: ${hl}.` : "",
+    ents ? `Entities: ${ents}.` : "",
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+}
+
 export function chunkText(text: string, maxLen = 900, overlap = 150): string[] {
   const clean = text.replace(/\s+\n/g, "\n").trim();
   if (clean.length <= maxLen) return clean ? [clean] : [];
