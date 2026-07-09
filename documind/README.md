@@ -46,6 +46,12 @@ If your link pointed to a specific OCR API, swap it in inside
 [`server/src/ai.ts`](server/src/ai.ts) — that's the only file that talks to the
 model.
 
+**PDFs** are handled robustly: for digital PDFs the text is extracted directly
+(via `unpdf`) and analyzed as text — reliable across every OpenAI-compatible
+gateway — and only image-only/scanned PDFs fall back to the vision path.
+Dates in German/European formats (e.g. `15.08.2026`) are normalized to ISO so
+deadlines are detected correctly.
+
 ---
 
 ## Architecture

@@ -231,8 +231,35 @@ function normalize(parsed: any): DocAnalysis {
   };
 }
 
+/**
+ * Extract text from a (digital) PDF so we can analyze it as text — more
+ * reliable across OpenAI-compatible gateways than sending the PDF as a vision
+ * file. Returns "" for image-only/scanned PDFs (caller falls back to vision).
+ */
+export async function pdfToText(base64: string): Promise<string> {
+  try {
+    const { extractText, getDocumentProxy } = await import("unpdf");
+    const pdf = await getDocumentProxy(new Uint8Array(Buffer.from(base64, "base64")));
+    const { text } = await extractText(pdf, { mergePages: true });
+    return (Array.isArray(text) ? text.join("\n") : text).trim();
+  } catch {
+    return "";
+  }
+}
+
 export async function analyzeDocument(input: AnalyzeInput): Promise<DocAnalysis> {
   ensureKey();
+
+  // For PDFs, prefer extracted text (works on every gateway); fall back to the
+  // vision file path when the PDF has no embedded text (i.e. it's a scan).
+  if (input.mimeType === "application/pdf") {
+    const b64 = input.imageBase64 ?? input.imagesBase64?.[0];
+    if (b64) {
+      const text = await pdfToText(b64);
+      if (text.length > 40) return analyzeDocument({ text });
+    }
+  }
+
   const messages: ChatCompletionMessageParam[] = [
     { role: "system", content: ANALYSIS_SYSTEM },
     { role: "user", content: userContent(input) },
