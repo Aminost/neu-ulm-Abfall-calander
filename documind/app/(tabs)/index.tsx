@@ -1,6 +1,7 @@
+import React from "react";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "expo-router";
-import { AlertTriangle, CalendarClock, FileText, Inbox, Search } from "lucide-react-native";
+import { AlertTriangle, CalendarClock, CreditCard, FileText, Inbox, Search } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
 import {
   Pressable,
@@ -79,9 +80,13 @@ export default function LibraryScreen() {
   }, [load]);
 
   const deadline = nextDeadline(docs);
-  const criticalCount = docs
-    .flatMap((d) => d.analysis.highlights)
-    .filter((h) => h.type === "critical").length;
+  const today = new Date().toISOString().slice(0, 10);
+  const allHighlights = docs.flatMap((d) => d.analysis.highlights);
+  const upcomingCount = allHighlights.filter(
+    (h) => h.type === "deadline" && h.date && h.date >= today,
+  ).length;
+  const paymentsCount = allHighlights.filter((h) => h.type === "payment").length;
+  const criticalCount = allHighlights.filter((h) => h.type === "critical").length;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -93,28 +98,24 @@ export default function LibraryScreen() {
       >
         <ScreenTitle title="Library" subtitle={`${docs.length} document${docs.length === 1 ? "" : "s"} digitized`} />
 
-        {(deadline || criticalCount > 0) && (
-          <View style={styles.alertRow}>
-            {deadline && (
-              <Card style={styles.alertCard}>
-                <CalendarClock color={colors.deadline} size={18} />
-                <Text style={styles.alertLabel}>Next deadline</Text>
-                <Text style={styles.alertValue} numberOfLines={2}>
-                  {deadline.text}
-                </Text>
-                <Text style={styles.alertDate}>{deadline.date}</Text>
-              </Card>
-            )}
-            {criticalCount > 0 && (
-              <Card style={styles.alertCard}>
-                <AlertTriangle color={colors.critical} size={18} />
-                <Text style={styles.alertLabel}>Critical items</Text>
-                <Text style={[styles.alertValue, { color: colors.critical }]}>
-                  {criticalCount} need attention
-                </Text>
-              </Card>
-            )}
+        {docs.length > 0 && (
+          <View style={styles.statRow}>
+            <StatCard label="Upcoming" value={upcomingCount} color={colors.deadline} icon={<CalendarClock color={colors.deadline} size={16} />} />
+            <StatCard label="Payments" value={paymentsCount} color={colors.payment} icon={<CreditCard color={colors.payment} size={16} />} />
+            <StatCard label="Critical" value={criticalCount} color={colors.critical} icon={<AlertTriangle color={colors.critical} size={16} />} />
           </View>
+        )}
+
+        {deadline && (
+          <Card style={styles.heroCard}>
+            <CalendarClock color={colors.deadline} size={18} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.alertLabel}>Next deadline · {deadline.date}</Text>
+              <Text style={styles.heroValue} numberOfLines={2}>
+                {deadline.text}
+              </Text>
+            </View>
+          </Card>
         )}
 
         {docs.length > 0 && (
@@ -207,6 +208,26 @@ export default function LibraryScreen() {
   );
 }
 
+function StatCard({
+  label,
+  value,
+  color,
+  icon,
+}: {
+  label: string;
+  value: number;
+  color: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <Card style={styles.statCard}>
+      {icon}
+      <Text style={[styles.statValue, { color }]}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </Card>
+  );
+}
+
 function FilterChip({
   label,
   active,
@@ -248,11 +269,13 @@ const styles = StyleSheet.create({
   },
   chipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
   chipText: { fontSize: font.small, color: colors.textMuted, fontWeight: "600" },
-  alertRow: { flexDirection: "row", gap: spacing.md, marginBottom: spacing.xs },
-  alertCard: { flex: 1, gap: 4, paddingVertical: spacing.md },
   alertLabel: { fontSize: font.tiny, color: colors.textMuted, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4 },
-  alertValue: { fontSize: font.body, color: colors.text, fontWeight: "700" },
-  alertDate: { fontSize: font.small, color: colors.deadline, fontWeight: "600" },
+  statRow: { flexDirection: "row", gap: spacing.md },
+  statCard: { flex: 1, alignItems: "center", gap: 2, paddingVertical: spacing.md },
+  statValue: { fontSize: font.h2, fontWeight: "800" },
+  statLabel: { fontSize: font.tiny, color: colors.textMuted, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.3 },
+  heroCard: { flexDirection: "row", gap: spacing.md, alignItems: "center" },
+  heroValue: { fontSize: font.body, color: colors.text, fontWeight: "700", marginTop: 2 },
   docCard: { gap: spacing.sm },
   docHeader: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   docIcon: {

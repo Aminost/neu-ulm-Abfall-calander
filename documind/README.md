@@ -1,8 +1,11 @@
 # DocuMind
 
-> **Build status:** verified — `npm install`, `tsc --noEmit`, and Metro bundling
-> for **web and Android** all pass on a clean checkout. A committed
-> `package-lock.json` pins the exact versions that were tested.
+> **Build status:** verified — `npm install`, `tsc --noEmit` (app + server),
+> Metro bundling for **web and Android**, and the backend pipeline test suite
+> (`cd server && npm test`) all pass on a clean checkout. The tests drive the
+> full analyze → store → knowledge-graph → retrieval → cited-answer flow against
+> a mocked model (no API key needed). A committed `package-lock.json` pins the
+> exact versions that were tested.
 
 A clean, document-digitization app for React Native (Expo). Scan or import a
 document and DocuMind reads it, sorts it by topic, flags the things that matter

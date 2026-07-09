@@ -103,12 +103,15 @@ export function chunkText(text: string, maxLen = 900, overlap = 150): string[] {
   let i = 0;
   while (i < clean.length) {
     let end = Math.min(i + maxLen, clean.length);
-    const slice = clean.slice(i, end);
-    const breakAt = Math.max(slice.lastIndexOf("\n"), slice.lastIndexOf(". "));
-    if (end < clean.length && breakAt > maxLen * 0.5) end = i + breakAt + 1;
+    if (end < clean.length) {
+      // Prefer to break on a paragraph or sentence boundary in the back half.
+      const slice = clean.slice(i, end);
+      const breakAt = Math.max(slice.lastIndexOf("\n"), slice.lastIndexOf(". "));
+      if (breakAt > maxLen * 0.5) end = i + breakAt + 1;
+    }
     out.push(clean.slice(i, end).trim());
-    i = end - overlap;
-    if (i < 0) i = 0;
+    if (end >= clean.length) break; // reached the end — stop
+    i = Math.max(end - overlap, i + 1); // always move forward
   }
   return out.filter(Boolean);
 }
