@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { documentCategories, filterDocuments } from "./libraryLogic";
+import { documentCategories, documentsForEntity, filterDocuments } from "./libraryLogic";
 import type { DocumentRecord } from "./types";
 
 function doc(id: string, category: string, over: Partial<DocumentRecord["analysis"]> = {}): DocumentRecord {
@@ -46,4 +46,10 @@ test("filterDocuments respects category and empty query", () => {
   assert.deepEqual(filterDocuments(docs, "", "Utilities").map((d) => d.id), ["a", "c"]);
   assert.deepEqual(filterDocuments(docs, "", null).length, 3);
   assert.deepEqual(filterDocuments(docs, "gas", "Insurance"), []); // category excludes it
+});
+
+test("documentsForEntity finds documents mentioning an entity", () => {
+  assert.deepEqual(documentsForEntity(docs, "Stadtwerke Neu-Ulm").map((d) => d.id), ["a"]);
+  assert.deepEqual(documentsForEntity(docs, "AOK").map((d) => d.id), ["b"]);
+  assert.deepEqual(documentsForEntity(docs, "Nonexistent"), []);
 });

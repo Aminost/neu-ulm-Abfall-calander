@@ -31,3 +31,17 @@ export function filterDocuments(
     return hay.includes(q);
   });
 }
+
+/** Documents that mention a given entity (by entity list, relation, or title). */
+export function documentsForEntity(docs: DocumentRecord[], name: string): DocumentRecord[] {
+  const key = name.trim().toLowerCase();
+  if (!key) return [];
+  return docs.filter(
+    (d) =>
+      d.analysis.entities.some((e) => e.name.trim().toLowerCase() === key) ||
+      d.analysis.relations.some(
+        (r) => r.from.trim().toLowerCase() === key || r.to.trim().toLowerCase() === key,
+      ) ||
+      d.analysis.title.toLowerCase().includes(key),
+  );
+}

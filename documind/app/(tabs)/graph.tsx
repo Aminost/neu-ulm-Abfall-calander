@@ -1,11 +1,12 @@
 import React from "react";
-import { useFocusEffect } from "expo-router";
-import { Share2 } from "lucide-react-native";
+import { useFocusEffect, useRouter } from "expo-router";
+import { FileText, Share2, X } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Circle, Line, Text as SvgText } from "react-native-svg";
 import { Card, EmptyState, ScreenTitle } from "../../src/components/ui";
+import { documentsForEntity } from "../../src/lib/libraryLogic";
 import { listDocuments } from "../../src/lib/storage";
 import { colors, font, spacing } from "../../src/lib/theme";
 import type { DocumentRecord, Entity, Relation } from "../../src/lib/types";
@@ -60,12 +61,19 @@ function buildGraph(docs: DocumentRecord[]): { nodes: GraphNode[]; edges: Relati
 
 export default function GraphScreen() {
   const { width } = useWindowDimensions();
+  const router = useRouter();
   const [docs, setDocs] = useState<DocumentRecord[]>([]);
+  const [selected, setSelected] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
       listDocuments().then(setDocs);
     }, []),
+  );
+
+  const relatedDocs = useMemo(
+    () => (selected ? documentsForEntity(docs, selected) : []),
+    [docs, selected],
   );
 
   const { nodes, edges } = useMemo(() => buildGraph(docs), [docs]);
@@ -129,15 +137,26 @@ export default function GraphScreen() {
                   const p = positions.get(n.name.trim().toLowerCase())!;
                   const radius = 8 + Math.min(n.count, 6) * 2;
                   const c = colorFor(n.type);
+                  const isSel = selected?.trim().toLowerCase() === n.name.trim().toLowerCase();
                   return (
                     <React.Fragment key={n.name}>
-                      <Circle cx={p.x} cy={p.y} r={radius} fill={c} opacity={0.9} />
+                      <Circle
+                        cx={p.x}
+                        cy={p.y}
+                        r={radius}
+                        fill={c}
+                        opacity={selected && !isSel ? 0.35 : 0.9}
+                        stroke={isSel ? colors.text : "none"}
+                        strokeWidth={isSel ? 2 : 0}
+                        onPress={() => setSelected(isSel ? null : n.name)}
+                      />
                       <SvgText
                         x={p.x}
                         y={p.y + radius + 12}
                         fontSize={10}
                         fill={colors.text}
                         textAnchor="middle"
+                        onPress={() => setSelected(isSel ? null : n.name)}
                       >
                         {n.name.length > 16 ? n.name.slice(0, 15) + "…" : n.name}
                       </SvgText>
@@ -145,7 +164,37 @@ export default function GraphScreen() {
                   );
                 })}
               </Svg>
+              <Text style={styles.tapHint}>Tap a node to see its documents.</Text>
             </Card>
+
+            {selected && (
+              <Card style={{ marginTop: spacing.md, gap: spacing.sm }}>
+                <View style={styles.selHeader}>
+                  <Text style={styles.selTitle} numberOfLines={1}>
+                    {selected}
+                  </Text>
+                  <Pressable onPress={() => setSelected(null)} hitSlop={8}>
+                    <X color={colors.textMuted} size={18} />
+                  </Pressable>
+                </View>
+                {relatedDocs.length === 0 ? (
+                  <Text style={styles.selEmpty}>No documents reference this entity.</Text>
+                ) : (
+                  relatedDocs.map((d) => (
+                    <Pressable
+                      key={d.id}
+                      onPress={() => router.push(`/document/${d.id}`)}
+                      style={({ pressed }) => [styles.selRow, pressed && { opacity: 0.85 }]}
+                    >
+                      <FileText color={colors.accent} size={16} />
+                      <Text style={styles.selDoc} numberOfLines={1}>
+                        {d.analysis.title || "Untitled"}
+                      </Text>
+                    </Pressable>
+                  ))
+                )}
+              </Card>
+            )}
 
             <Card style={{ marginTop: spacing.md }}>
               <Text style={styles.legendTitle}>Legend</Text>
@@ -178,4 +227,17 @@ const styles = StyleSheet.create({
   legendDot: { width: 10, height: 10, borderRadius: 5 },
   legendText: { fontSize: font.small, color: colors.textMuted, textTransform: "capitalize" },
   legendNote: { fontSize: font.tiny, color: colors.textFaint, marginTop: spacing.md },
+  tapHint: { fontSize: font.tiny, color: colors.textFaint, textAlign: "center", marginTop: spacing.xs },
+  selHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  selTitle: { fontSize: font.h3, fontWeight: "700", color: colors.text, flex: 1 },
+  selEmpty: { fontSize: font.small, color: colors.textMuted },
+  selRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  selDoc: { fontSize: font.body, color: colors.text, flex: 1 },
 });
