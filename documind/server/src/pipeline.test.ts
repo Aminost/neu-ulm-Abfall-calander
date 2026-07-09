@@ -53,6 +53,16 @@ const server = http.createServer((req, res) => {
         // chat request → echo something grounded in the facts it was given
         content =
           "You owe 149,90 EUR to Stadtwerke Neu-Ulm, due 2026-08-15. Source: Stadtwerke Rechnung.";
+        if (payload.stream) {
+          // Emit the answer as SSE deltas, like a real streaming completion.
+          res.setHeader("content-type", "text/event-stream");
+          for (const part of content.match(/.{1,12}/g) ?? [content]) {
+            res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: part } }] })}\n\n`);
+          }
+          res.write("data: [DONE]\n\n");
+          res.end();
+          return;
+        }
       }
       res.end(JSON.stringify({ choices: [{ message: { content } }] }));
       return;
@@ -170,6 +180,20 @@ test("chat: graph-aware answer returns and is grounded", async () => {
   );
   assert.ok(answer.includes("149,90 EUR"));
   assert.ok(answer.includes("2026-08-15"));
+});
+
+test("chat streaming: answerQuestionStream emits deltas that form the answer", async () => {
+  const parts: string[] = [];
+  await ai.answerQuestionStream(
+    "what do I owe?",
+    [{ title: "Stadtwerke Rechnung", text: "Betrag 149,90 EUR" }],
+    [],
+    store.factsSheet(),
+    (d) => parts.push(d),
+  );
+  const full = parts.join("");
+  assert.ok(parts.length > 1, "answer arrived in multiple deltas");
+  assert.ok(full.includes("149,90 EUR"), "streamed answer contains the amount");
 });
 
 test("chunkText splits long text with overlap", () => {
