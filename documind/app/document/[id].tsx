@@ -11,8 +11,10 @@ import {
   FileDown,
   Flag,
   Pencil,
+  Plus,
   Share2,
   Trash2,
+  X,
   Zap,
 } from "lucide-react-native";
 import { useEffect, useState } from "react";
@@ -29,8 +31,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Card, Pill } from "../../src/components/ui";
 import { deleteServerDocument, upsertDocument } from "../../src/api/client";
+import { rescheduleAll } from "../../src/lib/notifications";
 import { savePdfToDevice } from "../../src/lib/scanner";
-import { deleteDocument, getDocument, saveDocument } from "../../src/lib/storage";
+import { deleteDocument, getDocument, listDocuments, saveDocument } from "../../src/lib/storage";
 import {
   colors,
   font,
@@ -41,7 +44,10 @@ import {
   spacing,
 } from "../../src/lib/theme";
 import { CATEGORIES } from "../../src/lib/types";
-import type { DocumentRecord, Highlight, HighlightType } from "../../src/lib/types";
+import type { DocumentRecord, Highlight, HighlightType, Severity } from "../../src/lib/types";
+
+const HL_TYPES: HighlightType[] = ["deadline", "payment", "critical", "action"];
+const SEVERITIES: Severity[] = ["low", "medium", "high"];
 
 const ICONS: Record<HighlightType, React.ComponentType<{ color: string; size: number }>> = {
   deadline: CalendarClock,
@@ -58,6 +64,7 @@ export default function DocumentDetail() {
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editCategory, setEditCategory] = useState("");
+  const [editHighlights, setEditHighlights] = useState<Highlight[]>([]);
 
   useEffect(() => {
     if (id) getDocument(id).then(setDoc);
@@ -67,14 +74,36 @@ export default function DocumentDetail() {
     if (!doc) return;
     setEditTitle(doc.analysis.title);
     setEditCategory(doc.analysis.category);
+    setEditHighlights(doc.analysis.highlights.map((h) => ({ ...h })));
     setEditing(true);
+  }
+
+  function updateHl(i: number, patch: Partial<Highlight>) {
+    setEditHighlights((hs) => hs.map((h, idx) => (idx === i ? { ...h, ...patch } : h)));
+  }
+  function removeHl(i: number) {
+    setEditHighlights((hs) => hs.filter((_, idx) => idx !== i));
+  }
+  function addHl() {
+    setEditHighlights((hs) => [
+      ...hs,
+      { id: `n${Date.now()}${hs.length}`, type: "deadline", text: "", severity: "medium" },
+    ]);
   }
 
   async function saveEdit() {
     if (!doc) return;
+    const cleanedHighlights = editHighlights
+      .map((h) => ({ ...h, text: h.text.trim(), date: h.date?.trim() || undefined, amount: h.amount?.trim() || undefined }))
+      .filter((h) => h.text);
     const updated: DocumentRecord = {
       ...doc,
-      analysis: { ...doc.analysis, title: editTitle.trim() || "Untitled document", category: editCategory },
+      analysis: {
+        ...doc.analysis,
+        title: editTitle.trim() || "Untitled document",
+        category: editCategory,
+        highlights: cleanedHighlights,
+      },
     };
     setDoc(updated);
     setEditing(false);
@@ -85,6 +114,8 @@ export default function DocumentDetail() {
       createdAt: updated.createdAt,
       analysis: updated.analysis,
     }).catch(() => {});
+    // Reminders may have changed — reschedule from the full library.
+    listDocuments().then((all) => rescheduleAll(all).catch(() => {}));
   }
 
   async function openPdf() {
@@ -232,7 +263,25 @@ export default function DocumentDetail() {
           </Card>
         ) : null}
 
-        {highlights.length > 0 && (
+        {editing ? (
+          <View style={{ marginTop: spacing.lg }}>
+            <Text style={styles.heading}>Highlights</Text>
+            <View style={{ gap: spacing.md, marginTop: spacing.sm }}>
+              {editHighlights.map((h, i) => (
+                <HighlightEditor
+                  key={h.id}
+                  h={h}
+                  onChange={(patch) => updateHl(i, patch)}
+                  onRemove={() => removeHl(i)}
+                />
+              ))}
+              <Pressable onPress={addHl} style={styles.addBtn}>
+                <Plus color={colors.accent} size={18} />
+                <Text style={styles.addBtnText}>Add highlight</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : highlights.length > 0 ? (
           <View style={{ marginTop: spacing.lg }}>
             <Text style={styles.heading}>Highlights</Text>
             <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
@@ -241,7 +290,7 @@ export default function DocumentDetail() {
               ))}
             </View>
           </View>
-        )}
+        ) : null}
 
         {analysis.entities.length > 0 && (
           <View style={{ marginTop: spacing.lg }}>
@@ -274,6 +323,82 @@ export default function DocumentDetail() {
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function HighlightEditor({
+  h,
+  onChange,
+  onRemove,
+}: {
+  h: Highlight;
+  onChange: (patch: Partial<Highlight>) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <Card style={styles.hlEdit}>
+      <View style={styles.hlEditTop}>
+        <View style={styles.typeChips}>
+          {HL_TYPES.map((t) => {
+            const active = h.type === t;
+            const c = highlightColor[t];
+            return (
+              <Pressable
+                key={t}
+                onPress={() => onChange({ type: t })}
+                style={[styles.miniChip, active && { backgroundColor: c, borderColor: c }]}
+              >
+                <Text style={[styles.miniChipText, active && { color: colors.white }]}>
+                  {highlightLabel[t]}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <Pressable onPress={onRemove} hitSlop={8}>
+          <X color={colors.textMuted} size={18} />
+        </Pressable>
+      </View>
+      <TextInput
+        style={styles.hlInput}
+        value={h.text}
+        onChangeText={(t) => onChange({ text: t })}
+        placeholder="Description"
+        placeholderTextColor={colors.textFaint}
+        multiline
+      />
+      <View style={styles.hlRow}>
+        <TextInput
+          style={[styles.hlInput, styles.hlHalf]}
+          value={h.date ?? ""}
+          onChangeText={(t) => onChange({ date: t })}
+          placeholder="Date YYYY-MM-DD"
+          placeholderTextColor={colors.textFaint}
+          autoCapitalize="none"
+        />
+        <TextInput
+          style={[styles.hlInput, styles.hlHalf]}
+          value={h.amount ?? ""}
+          onChangeText={(t) => onChange({ amount: t })}
+          placeholder="Amount"
+          placeholderTextColor={colors.textFaint}
+        />
+      </View>
+      <View style={styles.typeChips}>
+        {SEVERITIES.map((s) => {
+          const active = h.severity === s;
+          return (
+            <Pressable
+              key={s}
+              onPress={() => onChange({ severity: s })}
+              style={[styles.miniChip, active && styles.miniChipActive]}
+            >
+              <Text style={[styles.miniChipText, active && { color: colors.white }]}>{s}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </Card>
   );
 }
 
@@ -381,6 +506,41 @@ const styles = StyleSheet.create({
   },
   summary: { fontSize: font.body, color: colors.text, lineHeight: 22 },
   heading: { fontSize: font.h3, fontWeight: "700", color: colors.text },
+  hlEdit: { gap: spacing.sm },
+  hlEditTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  typeChips: { flexDirection: "row", gap: 6, flexWrap: "wrap", flex: 1 },
+  miniChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  miniChipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
+  miniChipText: { fontSize: font.tiny, color: colors.textMuted, fontWeight: "700", textTransform: "capitalize" },
+  hlInput: {
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    fontSize: font.small,
+    color: colors.text,
+  },
+  hlRow: { flexDirection: "row", gap: spacing.sm },
+  hlHalf: { flex: 1 },
+  addBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderStyle: "dashed",
+  },
+  addBtnText: { fontSize: font.small, fontWeight: "700", color: colors.accent },
   highlight: { flexDirection: "row", gap: spacing.md, alignItems: "flex-start" },
   hIcon: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   hTop: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
