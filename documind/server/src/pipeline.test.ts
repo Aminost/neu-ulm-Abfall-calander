@@ -203,6 +203,21 @@ test("chunkText splits long text with overlap", () => {
   assert.ok(chunks.every((c) => c.length <= 360));
 });
 
+test("blob storage round-trips and is cleared with the document", () => {
+  const pdf = Buffer.from("%PDF-1.4 fake pdf bytes").toString("base64");
+  const img = Buffer.from("\x89PNG fake image").toString("base64");
+
+  store.saveBlob("bdoc", "pdf", pdf);
+  store.saveBlob("bdoc", "image", img);
+  assert.equal(store.readBlob("bdoc", "pdf"), pdf, "pdf round-trips");
+  assert.equal(store.readBlob("bdoc", "image"), img, "image round-trips");
+  assert.equal(store.readBlob("nope", "pdf"), null, "missing blob → null");
+
+  store.removeDoc("bdoc"); // also removes blobs
+  assert.equal(store.readBlob("bdoc", "pdf"), null, "pdf removed with document");
+  assert.equal(store.readBlob("bdoc", "image"), null, "image removed with document");
+});
+
 test("removeDoc clears the document and its chunks", () => {
   store.removeDoc("d1");
   assert.equal(store.listDocs().length, 0);
