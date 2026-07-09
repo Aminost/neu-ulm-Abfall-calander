@@ -13,6 +13,7 @@ const IMAGE_DIR = FileSystem.documentDirectory + "documind/";
 
 export interface Settings {
   apiUrl: string;
+  onboarded?: boolean;
 }
 
 async function ensureDir() {

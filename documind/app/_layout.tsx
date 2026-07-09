@@ -31,6 +31,7 @@ export default function RootLayout() {
           }}
         >
           <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="onboarding" options={{ animation: "fade" }} />
           <Stack.Screen
             name="document/[id]"
             options={{ presentation: "card" }}

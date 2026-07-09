@@ -2,7 +2,7 @@ import React from "react";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "expo-router";
 import { AlertTriangle, CalendarClock, CreditCard, FileText, Inbox, Search } from "lucide-react-native";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Pressable,
   RefreshControl,
@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Badge, Card, EmptyState, Pill, ScreenTitle } from "../../src/components/ui";
 import { fetchServerDocuments } from "../../src/api/client";
-import { listDocuments, mergeRestored } from "../../src/lib/storage";
+import { getSettings, listDocuments, mergeRestored } from "../../src/lib/storage";
 import { colors, font, radius, severityWeight, spacing } from "../../src/lib/theme";
 import type { DocumentRecord, Highlight } from "../../src/lib/types";
 
@@ -40,6 +40,15 @@ export default function LibraryScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState("");
   const [cat, setCat] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
+
+  // First launch → onboarding.
+  useEffect(() => {
+    getSettings().then((s) => {
+      if (!s.onboarded) router.replace("/onboarding");
+      else setReady(true);
+    });
+  }, [router]);
 
   const categories = useMemo(
     () => [...new Set(docs.map((d) => d.analysis.category))].sort(),
@@ -101,6 +110,8 @@ export default function LibraryScreen() {
   ).length;
   const paymentsCount = allHighlights.filter((h) => h.type === "payment").length;
   const criticalCount = allHighlights.filter((h) => h.type === "critical").length;
+
+  if (!ready) return <SafeAreaView style={styles.safe} edges={["top"]} />;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
