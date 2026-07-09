@@ -173,10 +173,6 @@ app.post(
       res.status(400).json({ error: "Provide a question." });
       return;
     }
-    if (!process.env.AI_API_KEY) {
-      res.status(500).json({ error: "AI_API_KEY is not set on the server." });
-      return;
-    }
 
     const embedded = await embedTexts([question]);
     const queryEmbedding = embedded ? embedded[0] : null;
@@ -211,7 +207,9 @@ app.listen(PORT, () => {
   console.log(`\n  DocuMind backend → http://localhost:${PORT}`);
   console.log(`  Model: ${MODEL}`);
   if (!process.env.AI_API_KEY) {
-    console.warn("  ⚠  AI_API_KEY is not set — copy server/.env.example to server/.env and fill it in.\n");
+    console.log("  Mode:  offline heuristics (no AI_API_KEY set)");
+    console.log("         deadlines, costs, highlights & cited Q&A work from text/PDF documents.");
+    console.log("         Add AI_API_KEY to server/.env for vision OCR of photos + richer answers.\n");
   } else {
     console.log("");
   }

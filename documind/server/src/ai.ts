@@ -10,6 +10,7 @@ import type {
   ChatCompletionContentPart,
   ChatCompletionMessageParam,
 } from "openai/resources/chat/completions";
+import { heuristicAnalyze, heuristicAnswer } from "./heuristics";
 
 export const MODEL = process.env.AI_MODEL || "openai/azure.gpt-4.1";
 // Empty string disables embeddings; the server falls back to keyword retrieval.
@@ -27,10 +28,10 @@ const client = new OpenAI({
   baseURL: process.env.AI_BASE_URL || undefined,
 });
 
-function ensureKey(): void {
-  if (!process.env.AI_API_KEY) {
-    throw new Error("AI_API_KEY is not set on the server. Add it to server/.env and restart.");
-  }
+/** True when a real model is configured. When false the server runs in an
+ * offline heuristic mode instead of failing — the core features still work. */
+export function hasModel(): boolean {
+  return Boolean(process.env.AI_API_KEY);
 }
 
 // ── Domain types (kept in sync with the app's src/lib/types.ts) ──────────────
@@ -285,8 +286,6 @@ export async function pdfToText(base64: string): Promise<string> {
 }
 
 export async function analyzeDocument(input: AnalyzeInput): Promise<DocAnalysis> {
-  ensureKey();
-
   // For PDFs, prefer extracted text (works on every gateway); fall back to the
   // vision file path when the PDF has no embedded text (i.e. it's a scan).
   if (input.mimeType === "application/pdf") {
@@ -297,33 +296,52 @@ export async function analyzeDocument(input: AnalyzeInput): Promise<DocAnalysis>
     }
   }
 
+  // No model configured: use the offline heuristic analyzer. It needs text —
+  // for text/PDF documents that works fully; image-only scans can't be OCR'd
+  // without a model, so we return a minimal record the user can still edit.
+  if (!hasModel()) {
+    return heuristicAnalyze(input.text ?? "");
+  }
+
   const messages: ChatCompletionMessageParam[] = [
     { role: "system", content: ANALYSIS_SYSTEM },
     { role: "user", content: userContent(input) },
   ];
 
-  let raw: string;
   try {
-    const res = await client.chat.completions.create({
-      model: MODEL,
-      temperature: 0.1,
-      max_tokens: 4096,
-      response_format: { type: "json_object" },
-      messages,
-    });
-    raw = res.choices[0]?.message?.content ?? "";
-  } catch {
-    // Some OpenAI-compatible gateways reject response_format — retry without it
-    // (extractJson tolerates prose/markdown around the JSON).
-    const res = await client.chat.completions.create({
-      model: MODEL,
-      temperature: 0.1,
-      max_tokens: 4096,
-      messages,
-    });
-    raw = res.choices[0]?.message?.content ?? "";
+    let raw: string;
+    try {
+      const res = await client.chat.completions.create({
+        model: MODEL,
+        temperature: 0.1,
+        max_tokens: 4096,
+        response_format: { type: "json_object" },
+        messages,
+      });
+      raw = res.choices[0]?.message?.content ?? "";
+    } catch {
+      // Some OpenAI-compatible gateways reject response_format — retry without it
+      // (extractJson tolerates prose/markdown around the JSON).
+      const res = await client.chat.completions.create({
+        model: MODEL,
+        temperature: 0.1,
+        max_tokens: 4096,
+        messages,
+      });
+      raw = res.choices[0]?.message?.content ?? "";
+    }
+    return normalize(extractJson(raw));
+  } catch (err) {
+    // Model unreachable / errored. If we at least have text, degrade gracefully
+    // to the heuristic analyzer rather than losing the document entirely.
+    if (input.text && input.text.trim().length > 0) {
+      console.warn(
+        `Model analysis failed (${err instanceof Error ? err.message : err}); using offline heuristics.`,
+      );
+      return heuristicAnalyze(input.text);
+    }
+    throw err;
   }
-  return normalize(extractJson(raw));
 }
 
 /**
@@ -363,7 +381,8 @@ export async function answerQuestion(
   history: { role: "user" | "assistant"; content: string }[],
   facts = "",
 ): Promise<string> {
-  ensureKey();
+  if (!hasModel()) return heuristicAnswer(question, facts, contexts);
+
   const excerpts =
     contexts.length > 0
       ? contexts.map((c, i) => `[${i + 1}] ${c.title}\n${c.text}`).join("\n\n---\n\n")
@@ -379,13 +398,20 @@ export async function answerQuestion(
     },
   ];
 
-  const res = await client.chat.completions.create({
-    model: MODEL,
-    temperature: 0.2,
-    max_tokens: 800,
-    messages,
-  });
-  return res.choices[0]?.message?.content?.trim() ?? "I couldn't generate an answer.";
+  try {
+    const res = await client.chat.completions.create({
+      model: MODEL,
+      temperature: 0.2,
+      max_tokens: 800,
+      messages,
+    });
+    return res.choices[0]?.message?.content?.trim() ?? "I couldn't generate an answer.";
+  } catch (err) {
+    console.warn(
+      `Model chat failed (${err instanceof Error ? err.message : err}); using offline answerer.`,
+    );
+    return heuristicAnswer(question, facts, contexts);
+  }
 }
 
 /** Same as answerQuestion, but streams the answer token-by-token via onDelta. */
@@ -396,27 +422,43 @@ export async function answerQuestionStream(
   facts: string,
   onDelta: (text: string) => void,
 ): Promise<void> {
-  ensureKey();
+  if (!hasModel()) {
+    // Stream the offline answer in word-sized chunks so the UI still animates.
+    const answer = heuristicAnswer(question, facts, contexts);
+    for (const token of answer.split(/(\s+)/)) if (token) onDelta(token);
+    return;
+  }
+
   const excerpts =
     contexts.length > 0
       ? contexts.map((c, i) => `[${i + 1}] ${c.title}\n${c.text}`).join("\n\n---\n\n")
       : "(no matching excerpts)";
   const factsBlock = facts.trim() ? facts : "(no documents digitized yet)";
 
-  const stream = await client.chat.completions.create({
-    model: MODEL,
-    temperature: 0.2,
-    max_tokens: 800,
-    stream: true,
-    messages: [
-      { role: "system", content: CHAT_SYSTEM },
-      ...history.slice(-6),
-      {
-        role: "user",
-        content: `FACTS overview (knowledge graph):\n${factsBlock}\n\nEXCERPTS:\n${excerpts}\n\nQuestion: ${question}`,
-      },
-    ],
-  });
+  let stream;
+  try {
+    stream = await client.chat.completions.create({
+      model: MODEL,
+      temperature: 0.2,
+      max_tokens: 800,
+      stream: true,
+      messages: [
+        { role: "system", content: CHAT_SYSTEM },
+        ...history.slice(-6),
+        {
+          role: "user",
+          content: `FACTS overview (knowledge graph):\n${factsBlock}\n\nEXCERPTS:\n${excerpts}\n\nQuestion: ${question}`,
+        },
+      ],
+    });
+  } catch (err) {
+    console.warn(
+      `Model stream failed (${err instanceof Error ? err.message : err}); using offline answerer.`,
+    );
+    const answer = heuristicAnswer(question, facts, contexts);
+    for (const token of answer.split(/(\s+)/)) if (token) onDelta(token);
+    return;
+  }
 
   for await (const chunk of stream) {
     const delta = chunk.choices[0]?.delta?.content;
