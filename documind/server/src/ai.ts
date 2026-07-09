@@ -103,7 +103,22 @@ Respond with STRICT JSON only (no markdown, no commentary) matching:
   "entities": [{ "name": string, "type": string }],
   "relations": [{ "from": string, "to": string, "label": string }]
 }
-Use the word JSON only as data. If a field has no data, return an empty string or empty array. Today's date is ${new Date().toISOString().slice(0, 10)}.`;
+Use the word JSON only as data. If a field has no data, return an empty string or empty array. Today's date is ${new Date().toISOString().slice(0, 10)}.
+
+IMPORTANT extraction rules:
+- Extract EVERY deadline and EVERY monetary amount you find — not just the first one.
+- Resolve relative or partial dates to an absolute YYYY-MM-DD using today's date (e.g. "innerhalb von 14 Tagen" / "within 14 days" → today + 14; "bis zum 15.08." with no year → the next 15 August).
+- German/European documents: dates are DAY-first (15.08.2026 = 15 August 2026) and amounts use a comma decimal (149,90 EUR = €149.90). Keep the amount string as written.
+- Treat anything with penalties, late fees, legal consequences, enforcement, loss of coverage/service, or harm if a deadline is missed as "critical".
+
+Worked example — input excerpt:
+"Betrag: 149,90 EUR. Fällig am 15.08.2026. Bei Zahlungsverzug fallen Mahngebühren an und die Belieferung kann eingestellt werden."
+Correct highlights:
+[
+  { "type": "payment",  "text": "Pay the invoice",                 "amount": "149,90 EUR", "severity": "high" },
+  { "type": "deadline", "text": "Invoice payment due",             "date": "2026-08-15",   "severity": "high" },
+  { "type": "critical", "text": "Late fees and possible supply cut-off if unpaid", "severity": "medium" }
+]`;
 
 export interface AnalyzeInput {
   imageBase64?: string;
@@ -309,11 +324,16 @@ export async function embedTexts(texts: string[]): Promise<number[][] | null> {
 
 const CHAT_SYSTEM = `You are DocuMind's assistant — a smart companion that helps the user manage their documents, deadlines, payments and bureaucracy.
 Answer using the provided knowledge base: a FACTS overview (structured deadlines, payments, critical items and entities across all documents — the user's knowledge graph) and EXCERPTS (relevant passages from specific documents).
-- Be specific and detailed. Quote amounts, dates and names exactly as written.
-- Prefer the FACTS overview for questions about what's due, what is owed, or which documents are involved; use EXCERPTS for details and to ground your answer.
-- Always attribute information to the source document by its title.
-- If the knowledge base doesn't contain the answer, say so plainly — never invent facts.
-- When relevant, proactively surface upcoming deadlines or required payments.`;
+
+How to answer:
+- Be complete and detailed. If several documents or items are relevant, cover ALL of them — don't stop at the first.
+- Quote amounts, dates and names exactly as written (e.g. "149,90 EUR", "15.08.2026").
+- Attribute every fact to its source document by title, inline, e.g. "…due 15.08.2026 (Stadtwerke Rechnung)".
+- Prefer the FACTS overview for "what's due / what do I owe / what needs action" questions; use EXCERPTS for details and grounding.
+- When it helps, organize the answer as a short list (one line per document/item with its date and amount).
+- Reply in the same language the user asked in.
+- If the knowledge base doesn't contain the answer, say so plainly — never invent facts, dates, or amounts.
+- Proactively flag anything urgent (imminent deadlines, overdue payments, critical consequences).`;
 
 export async function answerQuestion(
   question: string,
