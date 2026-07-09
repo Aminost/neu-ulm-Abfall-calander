@@ -14,6 +14,10 @@ const IMAGE_DIR = FileSystem.documentDirectory + "documind/";
 export interface Settings {
   apiUrl: string;
   onboarded?: boolean;
+  /** Days before a deadline to send the first reminder. Default 2. */
+  reminderDaysBefore?: number;
+  /** Also schedule reminders for dated payments, not just deadlines. Default true. */
+  remindPayments?: boolean;
 }
 
 async function ensureDir() {
@@ -134,8 +138,9 @@ export async function getSettings(): Promise<Settings> {
   }
 }
 
-export async function saveSettings(settings: Settings): Promise<void> {
-  await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+export async function saveSettings(patch: Partial<Settings>): Promise<void> {
+  const current = await getSettings();
+  await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...current, ...patch }));
 }
 
 export function newId(): string {

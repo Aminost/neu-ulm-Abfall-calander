@@ -1,6 +1,6 @@
-import { CheckCircle2, CloudDownload, Server, Sparkles, XCircle } from "lucide-react-native";
+import { Bell, CheckCircle2, CloudDownload, Server, Sparkles, XCircle } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { Alert, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Platform, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button, Card, ScreenTitle } from "../../src/components/ui";
 import {
@@ -17,8 +17,9 @@ import {
   saveSettings,
   writeBase64File,
 } from "../../src/lib/storage";
-import { scheduleDeadlineReminders } from "../../src/lib/notifications";
+import { rescheduleAll, scheduleDeadlineReminders } from "../../src/lib/notifications";
 import { sampleDocuments } from "../../src/lib/sampleData";
+import { listDocuments } from "../../src/lib/storage";
 import { colors, font, radius, spacing } from "../../src/lib/theme";
 
 type Health = { state: "idle" | "checking" | "ok" | "fail"; detail?: string };
@@ -29,6 +30,29 @@ export default function SettingsScreen() {
   const [health, setHealth] = useState<Health>({ state: "idle" });
   const [restoring, setRestoring] = useState(false);
   const [seeding, setSeeding] = useState(false);
+  const [reminderDays, setReminderDays] = useState(2);
+  const [remindPay, setRemindPay] = useState(true);
+  const [rescheduling, setRescheduling] = useState(false);
+
+  async function updateReminderDays(n: number) {
+    setReminderDays(n);
+    await saveSettings({ apiUrl: apiUrl.trim(), reminderDaysBefore: n, remindPayments: remindPay });
+  }
+  async function updateRemindPay(v: boolean) {
+    setRemindPay(v);
+    await saveSettings({ apiUrl: apiUrl.trim(), reminderDaysBefore: reminderDays, remindPayments: v });
+  }
+  async function reschedule() {
+    setRescheduling(true);
+    try {
+      const count = await rescheduleAll(await listDocuments());
+      Alert.alert("Reminders updated", `Scheduled ${count} reminder${count === 1 ? "" : "s"}.`);
+    } catch (e) {
+      Alert.alert("Couldn't reschedule", e instanceof Error ? e.message : String(e));
+    } finally {
+      setRescheduling(false);
+    }
+  }
 
   async function loadSamples() {
     setSeeding(true);
@@ -100,7 +124,11 @@ export default function SettingsScreen() {
   }
 
   useEffect(() => {
-    getSettings().then((s) => setApiUrl(s.apiUrl));
+    getSettings().then((s) => {
+      setApiUrl(s.apiUrl);
+      setReminderDays(s.reminderDaysBefore ?? 2);
+      setRemindPay(s.remindPayments ?? true);
+    });
   }, []);
 
   async function save() {
@@ -172,6 +200,45 @@ export default function SettingsScreen() {
               <XCircle color={colors.critical} size={18} />
               <Text style={[styles.statusText, { color: colors.critical }]}>{health.detail}</Text>
             </View>
+          )}
+        </Card>
+
+        <Card style={{ marginTop: spacing.md, gap: spacing.md }}>
+          <View style={styles.labelRow}>
+            <Bell color={colors.accent} size={18} />
+            <Text style={styles.label}>Reminders</Text>
+          </View>
+          <Text style={styles.hint}>Remind me this many days before a deadline:</Text>
+          <View style={styles.daysRow}>
+            {[0, 1, 2, 3, 7].map((n) => {
+              const active = n === reminderDays;
+              return (
+                <Text
+                  key={n}
+                  onPress={() => updateReminderDays(n)}
+                  style={[styles.dayChip, active && styles.dayChipActive]}
+                >
+                  {n === 0 ? "Same day" : `${n}d`}
+                </Text>
+              );
+            })}
+          </View>
+          <View style={styles.switchRow}>
+            <Text style={styles.switchLabel}>Also remind me about payments</Text>
+            <Switch
+              value={remindPay}
+              onValueChange={updateRemindPay}
+              trackColor={{ true: colors.accent, false: colors.border }}
+            />
+          </View>
+          <Button
+            label="Reschedule all reminders"
+            onPress={reschedule}
+            variant="secondary"
+            loading={rescheduling}
+          />
+          {Platform.OS === "web" && (
+            <Text style={styles.hint}>Reminders run on the phone app, not in the browser.</Text>
           )}
         </Card>
 
@@ -249,6 +316,22 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   statusText: { flex: 1, fontSize: font.small, fontWeight: "600" },
+  daysRow: { flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" },
+  dayChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+    color: colors.textMuted,
+    fontSize: font.small,
+    fontWeight: "600",
+    overflow: "hidden",
+  },
+  dayChipActive: { backgroundColor: colors.accent, borderColor: colors.accent, color: colors.white },
+  switchRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  switchLabel: { fontSize: font.body, color: colors.text, flex: 1 },
   aboutTitle: { fontSize: font.h3, fontWeight: "700", color: colors.text, marginBottom: spacing.sm },
   aboutText: { fontSize: font.body, color: colors.textMuted, lineHeight: 21 },
 });
