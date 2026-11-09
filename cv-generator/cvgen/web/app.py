@@ -130,6 +130,10 @@ def create_app(workspace: Workspace | None = None) -> FastAPI:
             raise LLMError("No Anthropic API key configured. Add it under Settings.")
         return make_client(key)
 
+    def require_api_key():
+        if not ws.api_key():
+            raise HTTPException(400, "No Anthropic API key configured yet. Add it under Settings.")
+
     def require_profile():
         try:
             profile = ws.load_profile()
@@ -268,6 +272,7 @@ def create_app(workspace: Workspace | None = None) -> FastAPI:
 
     @app.post("/api/knowledge/build")
     def build(body: BuildIn):
+        require_api_key()
         if not body.source_ids:
             raise HTTPException(400, "Select at least one source.")
         return {"task_id": tasks.submit("Build knowledge base", _build, body.source_ids)}
@@ -353,6 +358,7 @@ def create_app(workspace: Workspace | None = None) -> FastAPI:
                 ws.delete("templates", meta["id"])
                 raise HTTPException(400, f"Template error: {exc}") from exc
             return {"template_id": meta["id"]}
+        require_api_key()
         return {"task_id": tasks.submit("Convert CV into template", _convert, name, data)}
 
     @app.post("/api/templates/{tid}/preview")
@@ -453,6 +459,7 @@ def create_app(workspace: Workspace | None = None) -> FastAPI:
         if not body.job_url.strip() and not body.job_text.strip():
             raise HTTPException(400, "Paste a job link or the job description.")
         require_profile()
+        require_api_key()
         data = body.model_dump()
         data["template_id"] = body.template_id or ws.default_template_id()
         ws.template_path(data["template_id"])

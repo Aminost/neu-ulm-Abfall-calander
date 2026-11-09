@@ -88,10 +88,11 @@ def fetch_job(source: str, timeout: int = 30) -> JobPosting:
             resp = requests.get(source, headers=HEADERS, timeout=timeout)
             resp.raise_for_status()
         except requests.RequestException as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            reason = f"the site answered with error {status}" if status else "the site could not be reached"
             raise JobFetchError(
-                f"Could not download {source}: {exc}\n"
-                "Some sites (e.g. LinkedIn) block scripts. Copy the job text into a .txt "
-                "file and pass it with --job instead."
+                f"Could not read the job posting ({reason}). Some sites (e.g. LinkedIn) block "
+                "automatic reading. Copy the job description and paste it as text instead."
             ) from exc
         job = parse_html(resp.text, url=source)
     else:
@@ -106,6 +107,6 @@ def fetch_job(source: str, timeout: int = 30) -> JobPosting:
     if len(job.text.strip()) < 200:
         raise JobFetchError(
             "The job page returned almost no text (it is probably rendered with JavaScript "
-            "or behind a login). Copy the job description into a .txt file and pass that instead."
+            "or behind a login). Copy the job description and paste it as text instead."
         )
     return job

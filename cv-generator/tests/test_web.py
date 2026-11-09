@@ -125,13 +125,8 @@ def test_missing_api_key(tmp_path, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     c = TestClient(create_app(Workspace(tmp_path / "ws")))
     sid = c.post("/api/sources", files=[("files", ("cv.txt", b"Jane Doe, engineer at ACME since 2020."))]).json()["added"][0]["id"]
-    tid = c.post("/api/knowledge/build", json={"source_ids": [sid]}).json()["task_id"]
-    for _ in range(100):
-        t = c.get(f"/api/tasks/{tid}").json()
-        if t["status"] != "running":
-            break
-        time.sleep(0.05)
-    assert t["status"] == "error" and "API key" in t["error"]
+    r = c.post("/api/knowledge/build", json={"source_ids": [sid]})
+    assert r.status_code == 400 and "API key" in r.json()["detail"]  # fails fast, no task started
 
 
 def test_settings_hide_key(client):
