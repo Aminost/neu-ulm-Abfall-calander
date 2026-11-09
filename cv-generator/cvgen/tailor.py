@@ -37,14 +37,15 @@ Honesty rules - these override every other goal:
   `requirement_matches`. Do not paper over gaps.
 
 Tailoring guidance:
-- Write in the language of the job posting if the profile text is in that language; otherwise keep
-  the profile's language. (Report the posting language in analysis.language_of_posting.)
+- Follow the language instruction in <settings>. Keep German typography (e.g. „…“) if the profile
+  uses it. Report the posting language in analysis.language_of_posting.
 - Include every experience entry that matters for the timeline (avoid unexplained gaps), most
   recent first. Give relevant roles 3-6 bullets, less relevant roles 1-2. Order bullets by
   relevance to the job.
 - Skill groups: 3-5 groups, most relevant first, only skill ids from the profile. Drop irrelevant
   skills.
-- Projects/certifications: include only those that help for this job.
+- Projects/certifications/publications: include only those that help for this job (publications
+  are valuable for research-oriented roles).
 - Languages: include all languages unless clearly irrelevant.
 - The CV should fit on 1-2 pages: be selective.
 - Mirror the job ad's keywords where they are true, so applicant-tracking systems match the CV.
@@ -57,6 +58,13 @@ def _profile_yaml(profile: Profile) -> str:
     return yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
 
 
+def _settings_note(profile: Profile) -> str:
+    st = profile.settings
+    lang = (f"Write all CV text in language '{st.cv_language}'." if st.cv_language
+            else "Write CV text in the language of the profile text (not of the job ad).")
+    return f"{lang} Keep the summary under {st.summary_max_words} words."
+
+
 def build_user_message(profile: Profile, job: JobPosting) -> str:
     meta = {k: v for k, v in {"url": job.url, "title": job.title, "company": job.company,
                               "location": job.location}.items() if v}
@@ -64,6 +72,7 @@ def build_user_message(profile: Profile, job: JobPosting) -> str:
         "<profile>\n" + _profile_yaml(profile) + "</profile>\n\n"
         "<job_metadata>\n" + json.dumps(meta, ensure_ascii=False) + "\n</job_metadata>\n\n"
         "<job>\n" + job.text + "\n</job>\n\n"
+        "<settings>" + _settings_note(profile) + "</settings>\n\n"
         "Return the tailoring plan."
     )
 

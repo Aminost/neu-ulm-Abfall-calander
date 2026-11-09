@@ -50,8 +50,13 @@ def _tech_tokens(text: str) -> set[str]:
         tok = m.group(0).rstrip(".-/")
         if not tok or tok in _TECH_ALLOW:
             continue
-        if re.fullmatch(r"[a-z]+(?:-[a-z]+)+", tok):
-            continue  # ordinary hyphenated words ("shipment-tracking", "event-driven")
+        if "-" in tok and not re.search(r"[+#./]", tok):
+            # Hyphenated compound ("shipment-tracking", "KI-Lösungen", "Proof-of-Concept"):
+            # check only the technical-looking parts.
+            for part in tok.split("-"):
+                if part and part != tok:
+                    toks |= _tech_tokens(part)
+            continue
         toks.add(tok)
     return toks
 
@@ -79,14 +84,24 @@ def _parse_ym(value: str | None) -> date | None:
 
 
 def total_years_experience(profile: Profile, today: date | None = None) -> float:
+    """Years covered by at least one role (overlapping roles are counted once)."""
     today = today or date.today()
-    months = 0
+    spans = []
     for exp in profile.experience:
         start = _parse_ym(exp.start)
-        if not start:
-            continue
-        end = _parse_ym(exp.end) or today
-        months += max(0, (end.year - start.year) * 12 + end.month - start.month)
+        if start:
+            spans.append((start, _parse_ym(exp.end) or today))
+    months = 0
+    cur_s = cur_e = None
+    for s_, e_ in sorted(spans):
+        if cur_e is None or s_ > cur_e:
+            if cur_e is not None:
+                months += (cur_e.year - cur_s.year) * 12 + cur_e.month - cur_s.month
+            cur_s, cur_e = s_, e_
+        else:
+            cur_e = max(cur_e, e_)
+    if cur_e is not None:
+        months += (cur_e.year - cur_s.year) * 12 + cur_e.month - cur_s.month
     return months / 12
 
 
@@ -139,6 +154,11 @@ def apply_guard(profile: Profile, plan: TailoringPlan, allow_rephrase: bool = Tr
                 today: date | None = None) -> tuple[dict, GuardReport]:
     """Validate the plan and build the (safe) template context."""
     rep = GuardReport()
+    st = profile.settings
+
+    def rng(a, b):
+        return format_range(a, b, st.date_style, st.present_label)
+
     exps = profile.experience_by_id()
     bullets = profile.bullet_by_id()
     skills = profile.skill_by_id()
@@ -198,7 +218,7 @@ def apply_guard(profile: Profile, plan: TailoringPlan, allow_rephrase: bool = Tr
             "location": exp.location or "",
             "start": exp.start,
             "end": exp.end or "",
-            "dates": format_range(exp.start, exp.end),
+            "dates": rng(exp.start, exp.end),
             "employment_type": exp.employment_type or "",
             "description": exp.description or "",
             "bullets": chosen[exp.id],
@@ -219,8 +239,18 @@ def apply_guard(profile: Profile, plan: TailoringPlan, allow_rephrase: bool = Tr
             used.add(sid)
             items.append({"name": s.name, "level": s.level or "", "years": s.years})
         if items:
+            unleveled = [i for i in items if not i["level"]]
             skill_groups.append({"category": g.category, "items": items,
-                                 "joined": ", ".join(i["name"] for i in items)})
+                                 "joined": ", ".join(i["name"] for i in items),
+                                 "items_unleveled": unleveled,
+                                 "joined_unleveled": ", ".join(i["name"] for i in unleveled)})
+    # Skills that have a level (e.g. "Sehr gut: Python, Java"), grouped by level in profile order.
+    levels: dict[str, list[str]] = {}
+    for s_ in profile.skills:
+        if s_.level and (s_.id in used or not used):
+            levels.setdefault(s_.level, []).append(s_.name)
+    skills_by_level = [{"level": lv, "items": names, "joined": ", ".join(names)}
+                       for lv, names in levels.items()]
 
     # ---- simple id lists ----------------------------------------------------- #
     def pick(ids: list[str], coll: list, label: str, default_all: bool = False) -> list:
@@ -240,6 +270,7 @@ def apply_guard(profile: Profile, plan: TailoringPlan, allow_rephrase: bool = Tr
     languages = pick(plan.language_ids, profile.languages, "language", default_all=True)
     projects = pick(plan.project_ids, profile.projects, "project")
     certs = pick(plan.certification_ids, profile.certifications, "certification")
+    pubs = pick(plan.publication_ids, profile.publications, "publication")
 
     # ---- summary -------------------------------------------------------------- #
     summary = plan.summary.strip()
@@ -297,7 +328,7 @@ def apply_guard(profile: Profile, plan: TailoringPlan, allow_rephrase: bool = Tr
         "skill_groups": skill_groups,
         "education": [{
             "degree": e.degree, "institution": e.institution, "location": e.location or "",
-            "dates": format_range(e.start, e.end) if (e.start or e.end) else "",
+            "dates": rng(e.start, e.end) if (e.start or e.end) else "",
             "grade": e.grade or "", "details": e.details,
         } for e in education],
         "languages": [{"name": l.name, "level": l.level} for l in languages],
@@ -309,6 +340,11 @@ def apply_guard(profile: Profile, plan: TailoringPlan, allow_rephrase: bool = Tr
         "certifications": [{
             "name": c.name, "issuer": c.issuer or "", "date": c.date or "", "url": c.url or "",
         } for c in certs],
+        "skills_by_level": skills_by_level,
+        "skill_groups_unleveled": [g for g in skill_groups if g["items_unleveled"]],
+        "publications": [{"citation": x.citation, "year": x.year or "", "url": x.url or ""} for x in pubs],
+        "awards": [{"text": x.text, "date": x.date or ""} for x in profile.awards],
+        "activities": [{"text": x.text, "date": x.date or ""} for x in profile.activities],
         "interests": profile.interests,
         "interests_joined": ", ".join(profile.interests),
         "job": {
@@ -321,18 +357,21 @@ def apply_guard(profile: Profile, plan: TailoringPlan, allow_rephrase: bool = Tr
 
 
 _MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+_PRESENT_WORDS = {"present", "now", "current", "today", "heute"}
 
 
-def format_date(value: str | None) -> str:
-    if not value:
-        return "Present"
-    if str(value).lower() in {"present", "now", "current", "today"}:
-        return "Present"
+def format_date(value: str | None, style: str = "month_name", present: str = "Present") -> str:
+    if not value or str(value).lower() in _PRESENT_WORDS:
+        return present
     m = re.fullmatch(r"(\d{4})-(\d{1,2})(?:-\d{1,2})?", str(value))
     if m:
-        return f"{_MONTHS[int(m.group(2)) - 1]} {m.group(1)}"
+        year, month = m.group(1), int(m.group(2))
+        return f"{month:02d}/{year}" if style == "numeric" else f"{_MONTHS[month - 1]} {year}"
     return str(value)
 
 
-def format_range(start: str | None, end: str | None) -> str:
-    return f"{format_date(start)} – {format_date(end)}" if start else format_date(end)
+def format_range(start: str | None, end: str | None, style: str = "month_name",
+                 present: str = "Present") -> str:
+    if not start:
+        return format_date(end, style, present)
+    return f"{format_date(start, style, present)} – {format_date(end, style, present)}"

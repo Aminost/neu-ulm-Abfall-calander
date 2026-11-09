@@ -97,6 +97,15 @@ It works like a master CV, with everything included:
   allows that wording, so only add synonyms that really describe your work.
 - `headlines`: titles you are comfortable using about yourself.
 - `summaries`: your own pre-written summary, used as a fallback and in `--strict` mode.
+- `settings`: CV language, date style and summary length, e.g. for a German CV:
+
+```yaml
+settings:
+  date_style: numeric      # 10/2025 instead of Oct 2025
+  present_label: heute
+  cv_language: de
+  summary_max_words: 45
+```
 
 ## Using your own template
 
@@ -119,6 +128,7 @@ The template is a normal Word document with placeholders ([docxtpl](https://docx
 ```
 
    - in table rows use `{%tr for ... %}`; inside a single paragraph use `{% ... %}`.
+   Static parts (photo, name, address…) can stay as plain text in the template.
 3. Look at `templates/default.docx` (built by `templates/build_default_template.py`) for a full
    example, and run `python -m cvgen template-vars templates/my_template.docx` to check your tags.
 
@@ -132,6 +142,10 @@ Available variables:
 | `summary` | tailored profile paragraph |
 | `experience` | list of `{title, company, location, dates, start, end, employment_type, description, bullets[{text}]}` |
 | `skill_groups` | list of `{category, joined, items[{name, level, years}]}` |
+| `skills_by_level` | skills that have a `level`, grouped: `[{level: "Sehr gut", joined: "Python, Java"}]` |
+| `skill_groups_unleveled` | like `skill_groups`, but only skills without a level (`g.joined_unleveled`) |
+| `publications` | list of `{citation, year, url}` (chosen per job) |
+| `awards`, `activities` | lists of `{text, date}` (always all) |
 | `education` | list of `{degree, institution, location, dates, grade, details[]}` |
 | `projects` | list of `{name, role, date, url, description}` |
 | `certifications` | list of `{name, issuer, date, url}` |

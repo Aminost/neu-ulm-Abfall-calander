@@ -115,3 +115,28 @@ def test_render_docx(profile, tmp_path):
     text = "\n".join(p.text for p in Document(out).paragraphs)
     assert "Alex Example" in text and "ACME Logistics GmbH" in text
     assert "{{" not in text and "{%" not in text
+
+
+def test_numeric_dates_and_present_label(profile):
+    from datetime import date
+    from cvgen.guard import format_range, total_years_experience
+    assert format_range("2025-10", None, "numeric", "heute") == "10/2025 – heute"
+    assert format_range("2021-04", "2023-12", "numeric") == "04/2021 – 12/2023"
+    profile.settings.date_style, profile.settings.present_label = "numeric", "heute"
+    ctx, _ = apply_guard(profile, plan())
+    assert ctx["experience"][0]["dates"] == "04/2021 – heute"
+    # overlapping roles are not double counted
+    assert total_years_experience(profile, today=date(2026, 1, 1)) < 9.5
+
+
+def test_german_compounds_are_not_false_positives():
+    from cvgen.guard import _tech_tokens
+    toks = _tech_tokens("KI-gestützte Montageassistenz, Proof-of-Concept-Meilenstein, Kubernetes-Cluster")
+    assert toks == {"KI"}  # plain words are ignored, acronyms are still checked
+    assert "Neo4j" in _tech_tokens("Neo4j-Wissensgraph")
+
+
+def test_skills_by_level_and_unleveled_groups(profile):
+    ctx, _ = apply_guard(profile, plan())
+    assert ctx["skills_by_level"][0]["level"] == "Expert"
+    assert all(i["level"] == "" for g in ctx["skill_groups_unleveled"] for i in g["items_unleveled"])

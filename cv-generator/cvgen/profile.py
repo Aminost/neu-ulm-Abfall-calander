@@ -41,7 +41,8 @@ def lint_profile(profile: Profile) -> list[str]:
     problems = []
     ids = [e.id for e in profile.experience] + [b.id for e in profile.experience for b in e.bullets]
     for coll in (profile.education, profile.skills, profile.languages, profile.projects,
-                 profile.certifications, profile.summaries):
+                 profile.certifications, profile.summaries, profile.publications,
+                 profile.awards, profile.activities):
         ids += [x.id for x in coll]
     dupes = [i for i, n in Counter(ids).items() if n > 1]
     if dupes:

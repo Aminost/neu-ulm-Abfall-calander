@@ -104,8 +104,32 @@ class Summary(BaseModel):
     text: str
 
 
+class Publication(BaseModel):
+    id: str
+    citation: str
+    year: Optional[str] = None
+    url: Optional[str] = None
+
+
+class Entry(BaseModel):
+    """Generic short item (award, volunteering, sport ...)."""
+    id: str
+    text: str
+    date: Optional[str] = None
+
+
+class Settings(BaseModel):
+    date_style: Literal["month_name", "numeric"] = Field(
+        "month_name", description="'month_name' -> 'Oct 2025', 'numeric' -> '10/2025'")
+    present_label: str = "Present"  # e.g. "heute"
+    cv_language: Optional[str] = Field(
+        None, description="Force the CV language (e.g. 'de'). Default: language of your profile text.")
+    summary_max_words: int = 70
+
+
 class Profile(BaseModel):
     personal: Personal
+    settings: Settings = Field(default_factory=Settings)
     headlines: list[str] = Field(
         default_factory=list,
         description="Job titles / headlines you are comfortable using about yourself.",
@@ -121,6 +145,9 @@ class Profile(BaseModel):
     languages: list[Language] = Field(default_factory=list)
     projects: list[Project] = Field(default_factory=list)
     certifications: list[Certification] = Field(default_factory=list)
+    publications: list[Publication] = Field(default_factory=list)
+    awards: list[Entry] = Field(default_factory=list)
+    activities: list[Entry] = Field(default_factory=list)
     interests: list[str] = Field(default_factory=list)
     extra_facts: list[str] = Field(
         default_factory=list,
@@ -147,6 +174,9 @@ class Profile(BaseModel):
             self.projects,
             self.certifications,
             self.summaries,
+            self.publications,
+            self.awards,
+            self.activities,
         ):
             ids.update(item.id for item in coll)
         ids.update(self.bullet_by_id().keys())
@@ -213,6 +243,7 @@ class TailoringPlan(BaseModel):
     project_ids: list[str]
     education_ids: list[str]
     certification_ids: list[str]
+    publication_ids: list[str] = Field(default_factory=list)
     language_ids: list[str]
     requirement_matches: list[RequirementMatch]
     cover_letter_hooks: list[str] = Field(
