@@ -1,0 +1,144 @@
+# ---------------------------------------------------------------------------
+# YOUR FACTS DATABASE
+# Copy this file to profile/profile.yaml (git-ignored) and replace everything with
+# your real details. The generator will ONLY ever use what is written here.
+#
+# Tips
+# - Put in MORE than fits on one CV: every role, every achievement, every tool.
+#   The tailor picks the best subset for each job.
+# - Every item needs a unique `id` (short, lowercase, no spaces).
+# - Link bullets to skills (`skills: [...]`). That is what allows a bullet to be
+#   reworded with the job ad's vocabulary (incl. skill aliases) - nothing else.
+# - `aliases` = other names the SAME skill appears under in job ads
+#   (e.g. "K8s" for Kubernetes). Only add true synonyms.
+# - Dates: "YYYY-MM" or "YYYY". Leave `end` empty for your current job.
+# All data below is a fictional example.
+# ---------------------------------------------------------------------------
+
+personal:
+  name: Alex Example
+  email: alex.example@email.com
+  phone: "+49 170 0000000"
+  location: Ulm, Germany
+  links:
+    - { label: LinkedIn, url: linkedin.com/in/alex-example }
+    - { label: GitHub, url: github.com/alex-example }
+  # photo: photo.jpg          # relative to this file; use {{ photo }} in your template
+
+headlines:                     # titles you are comfortable using about yourself
+  - Senior Software Engineer
+  - Backend Engineer
+  - Full-Stack Developer
+
+summaries:                     # fallback / starting point for the profile paragraph
+  - id: sum_default
+    text: >-
+      Software engineer with 7 years of experience building reliable backend services and web
+      applications in Python and TypeScript. Experienced in cloud infrastructure on AWS, test
+      automation and mentoring junior developers in agile teams.
+
+experience:
+  - id: exp_acme
+    title: Senior Software Engineer
+    company: ACME Logistics GmbH
+    location: Ulm, Germany
+    start: "2021-04"
+    end:                         # empty = present
+    employment_type: Full-time
+    bullets:
+      - id: acme_api
+        text: Designed and built a Python/FastAPI platform for shipment tracking used by 40 enterprise customers, handling 2 million events per day.
+        skills: [python, fastapi, rest, postgres]
+      - id: acme_k8s
+        text: Migrated 12 services from virtual machines to Kubernetes on AWS, reducing infrastructure cost by 30%.
+        skills: [kubernetes, aws, docker]
+      - id: acme_ci
+        text: Introduced automated build, test and deployment pipelines with GitHub Actions, cutting release time from one day to 20 minutes.
+        skills: [cicd, github_actions]
+      - id: acme_mentor
+        text: Mentored 4 junior developers and led weekly code reviews.
+        skills: [mentoring]
+      - id: acme_kafka
+        text: Built event-driven integrations with carrier systems using Apache Kafka.
+        skills: [kafka]
+
+  - id: exp_webstudio
+    title: Software Developer
+    company: Webstudio Neu-Ulm
+    location: Neu-Ulm, Germany
+    start: "2018-01"
+    end: "2021-03"
+    employment_type: Full-time
+    bullets:
+      - id: web_react
+        text: Developed customer web applications with React and TypeScript for 15+ clients.
+        skills: [react, typescript]
+      - id: web_tests
+        text: Raised automated test coverage of the main product from 35% to 80% using pytest and Jest.
+        skills: [testing, python]
+      - id: web_scrum
+        text: Worked in a Scrum team of 6, taking the Scrum Master role for two quarters.
+        skills: [scrum]
+
+  - id: exp_student
+    title: Working Student – IT
+    company: Universitätsklinikum Ulm
+    location: Ulm, Germany
+    start: "2016-10"
+    end: "2017-12"
+    employment_type: Part-time
+    bullets:
+      - id: stud_scripts
+        text: Automated recurring IT administration tasks with Python scripts.
+        skills: [python]
+
+education:
+  - id: edu_msc
+    degree: M.Sc. Computer Science
+    institution: Ulm University
+    location: Ulm, Germany
+    start: "2015-10"
+    end: "2017-12"
+    grade: "1.7"
+    details:
+      - "Thesis: Scalable event processing for logistics networks"
+
+skills:
+  - { id: python, name: Python, category: Programming Languages, level: Expert, years: 7 }
+  - { id: typescript, name: TypeScript, category: Programming Languages, level: Advanced, aliases: [JavaScript, JS, TS] }
+  - { id: fastapi, name: FastAPI, category: Frameworks }
+  - { id: react, name: React, category: Frameworks, aliases: [React.js, ReactJS] }
+  - { id: rest, name: REST APIs, category: Architecture, aliases: [REST, RESTful, API design, APIs] }
+  - { id: postgres, name: PostgreSQL, category: Data, aliases: [Postgres, SQL] }
+  - { id: kafka, name: Apache Kafka, category: Data, aliases: [Kafka, event streaming, event-driven architecture] }
+  - { id: aws, name: AWS, category: Cloud & DevOps, aliases: [Amazon Web Services, cloud] }
+  - { id: kubernetes, name: Kubernetes, category: Cloud & DevOps, aliases: [K8s, container orchestration] }
+  - { id: docker, name: Docker, category: Cloud & DevOps, aliases: [containers, containerization] }
+  - { id: cicd, name: CI/CD, category: Cloud & DevOps, aliases: [continuous integration, continuous delivery, build pipelines, deployment pipelines] }
+  - { id: github_actions, name: GitHub Actions, category: Cloud & DevOps }
+  - { id: testing, name: Test Automation, category: Practices, aliases: [pytest, Jest, unit testing, TDD] }
+  - { id: scrum, name: Scrum, category: Practices, aliases: [Agile, agile methods] }
+  - { id: mentoring, name: Mentoring & Code Reviews, category: Leadership, aliases: [mentoring, coaching, code review] }
+
+languages:
+  - { id: lang_de, name: German, level: Native }
+  - { id: lang_en, name: English, level: C1 (fluent) }
+  - { id: lang_fr, name: French, level: A2 }
+
+projects:
+  - id: proj_abfall
+    name: Waste Collection Calendar App
+    role: Author
+    date: "2025"
+    url: github.com/alex-example/abfall-calendar
+    description: Open-source mobile app (React Native / Expo) showing waste-collection dates for Neu-Ulm with reminders.
+    skills: [react, typescript]
+
+certifications:
+  - { id: cert_aws, name: AWS Certified Developer – Associate, issuer: Amazon Web Services, date: "2023" }
+
+interests: [Cycling, Open-source software, Photography]
+
+extra_facts:
+  - Valid EU work permit.
+  - Available with three months' notice.

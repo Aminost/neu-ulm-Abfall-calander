@@ -1,0 +1,6 @@
+output/*
+!output/.gitkeep
+profile/profile.yaml
+templates/my_template.docx
+__pycache__/
+*.pyc

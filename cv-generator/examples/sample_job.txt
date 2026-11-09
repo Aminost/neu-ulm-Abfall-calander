@@ -1,0 +1,18 @@
+Senior Backend Engineer (m/w/d) – Logistics Platform
+NordFreight SE, Munich (hybrid)
+
+About us: NordFreight is a European freight-forwarding company building a digital platform that connects shippers and carriers in real time.
+
+Your tasks
+- Design and operate scalable microservices for our shipment-visibility platform
+- Build event-driven integrations with carriers (Kafka)
+- Own CI/CD pipelines and infrastructure as code on AWS
+- Mentor engineers and drive code quality
+
+Your profile
+- 5+ years of backend development with Python or Go
+- Experience with Kubernetes and Docker in production
+- Solid knowledge of PostgreSQL and REST API design
+- Experience with Terraform
+- Fluent German and English
+- Nice to have: Go, experience in logistics, AWS certification

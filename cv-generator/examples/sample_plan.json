@@ -1,0 +1,52 @@
+{
+  "analysis": {
+    "job_title": "Senior Backend Engineer",
+    "company": "NordFreight SE",
+    "company_summary": "European freight forwarder building a real-time digital platform connecting shippers and carriers.",
+    "seniority": "Senior",
+    "language_of_posting": "en",
+    "must_have": ["Python", "Kubernetes", "Docker", "PostgreSQL", "REST API design", "Terraform", "German", "English"],
+    "nice_to_have": ["Go", "logistics", "AWS certification"],
+    "keywords": ["microservices", "Kafka", "CI/CD", "AWS", "Terraform", "Kubernetes", "Docker", "PostgreSQL", "Python", "Go"]
+  },
+  "headline": "Senior Software Engineer",
+  "summary": "Senior software engineer with 7 years of experience building backend services in Python, most recently a shipment-tracking platform in logistics. Experienced with Kubernetes, Docker and CI/CD on AWS, event-driven integrations with Apache Kafka, and mentoring junior developers. AWS Certified Developer.",
+  "summary_fact_ids": ["exp_acme", "acme_api", "acme_k8s", "acme_ci", "acme_kafka", "acme_mentor", "cert_aws", "python"],
+  "experiences": [
+    {"experience_id": "exp_acme", "bullets": [
+      {"source_bullet_id": "acme_api", "text": "Designed and built a Python/FastAPI shipment-tracking platform with REST APIs, used by 40 enterprise customers and handling 2 million events per day."},
+      {"source_bullet_id": "acme_kafka", "text": "Built event-driven carrier integrations using Apache Kafka."},
+      {"source_bullet_id": "acme_k8s", "text": "Migrated 12 services from virtual machines to Kubernetes and Terraform on AWS, reducing infrastructure cost by 30%."},
+      {"source_bullet_id": "acme_ci", "text": "Introduced CI/CD pipelines with GitHub Actions, cutting release time from one day to 20 minutes."},
+      {"source_bullet_id": "acme_mentor", "text": "Mentored 4 junior developers and led weekly code reviews."}
+    ]},
+    {"experience_id": "exp_webstudio", "bullets": [
+      {"source_bullet_id": "web_tests", "text": "Raised automated test coverage of the main product from 35% to 80% using pytest and Jest."},
+      {"source_bullet_id": "web_react", "text": "Developed customer web applications with React and TypeScript for 15+ clients."}
+    ]},
+    {"experience_id": "exp_student", "bullets": [
+      {"source_bullet_id": "stud_scripts", "text": "Automated recurring IT administration tasks with Python scripts."}
+    ]}
+  ],
+  "skill_groups": [
+    {"category": "Backend", "skill_ids": ["python", "fastapi", "rest", "postgres", "kafka"]},
+    {"category": "Cloud & DevOps", "skill_ids": ["kubernetes", "docker", "aws", "cicd", "github_actions"]},
+    {"category": "Practices & Leadership", "skill_ids": ["testing", "scrum", "mentoring"]},
+    {"category": "Frontend", "skill_ids": ["typescript", "react"]}
+  ],
+  "project_ids": [],
+  "education_ids": ["edu_msc"],
+  "certification_ids": ["cert_aws"],
+  "language_ids": ["lang_de", "lang_en", "lang_fr"],
+  "requirement_matches": [
+    {"requirement": "5+ years backend development with Python or Go", "status": "met", "evidence_ids": ["exp_acme", "exp_webstudio", "python"], "note": "7 years Python"},
+    {"requirement": "Kubernetes and Docker in production", "status": "met", "evidence_ids": ["acme_k8s"], "note": ""},
+    {"requirement": "PostgreSQL and REST API design", "status": "met", "evidence_ids": ["acme_api", "postgres", "rest"], "note": ""},
+    {"requirement": "Terraform", "status": "missing", "evidence_ids": [], "note": "No Terraform in profile"},
+    {"requirement": "Fluent German and English", "status": "met", "evidence_ids": ["lang_de", "lang_en"], "note": ""},
+    {"requirement": "Go", "status": "missing", "evidence_ids": [], "note": ""},
+    {"requirement": "Logistics experience", "status": "met", "evidence_ids": ["exp_acme"], "note": ""},
+    {"requirement": "AWS certification", "status": "met", "evidence_ids": ["cert_aws"], "note": ""}
+  ],
+  "cover_letter_hooks": ["Built a shipment-tracking platform handling 2 million events per day - directly relevant to NordFreight's visibility platform."]
+}
