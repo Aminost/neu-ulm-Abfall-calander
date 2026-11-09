@@ -73,3 +73,26 @@ def docx_to_pdf(docx_path: str | Path, out_dir: str | Path | None = None) -> Pat
     pdf = out_dir / (docx_path.stem + ".pdf")
     convert(str(docx_path), str(pdf))
     return pdf
+
+
+def pdf_to_images(pdf_path: str | Path, out_dir: str | Path, prefix: str = "page",
+                  scale: float = 1.5) -> int:
+    """Render each PDF page to ``<prefix>-<n>.png`` (for previews that work in every browser).
+
+    Returns the number of pages rendered (0 if no renderer is available).
+    """
+    out_dir = Path(out_dir)
+    for old in out_dir.glob(f"{prefix}-*.png"):
+        old.unlink()
+    try:
+        import pypdfium2 as pdfium
+    except ImportError:
+        return 0
+    pdf = pdfium.PdfDocument(str(pdf_path))
+    try:
+        for i in range(len(pdf)):
+            img = pdf[i].render(scale=scale).to_pil()
+            img.save(out_dir / f"{prefix}-{i + 1}.png", optimize=True)
+        return len(pdf)
+    finally:
+        pdf.close()

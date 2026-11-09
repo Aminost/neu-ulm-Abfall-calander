@@ -375,3 +375,29 @@ def format_range(start: str | None, end: str | None, style: str = "month_name",
     if not start:
         return format_date(end, style, present)
     return f"{format_date(start, style, present)} – {format_date(end, style, present)}"
+
+
+def full_plan(profile: Profile, job_title: str = "", company: str = "") -> TailoringPlan:
+    """A plan that shows everything in the profile (master CV / template preview)."""
+    from .models import JobAnalysis, SkillGroup, TailoredBullet, TailoredExperience
+
+    groups: dict[str, list[str]] = {}
+    for s in profile.skills:
+        groups.setdefault(s.category, []).append(s.id)
+    return TailoringPlan(
+        analysis=JobAnalysis(job_title=job_title or "Master CV", company=company or "-",
+                             company_summary="", seniority="", language_of_posting="",
+                             must_have=[], nice_to_have=[], keywords=[]),
+        headline=profile.headlines[0] if profile.headlines else "",
+        summary=profile.summaries[0].text if profile.summaries else "",
+        summary_fact_ids=[profile.summaries[0].id] if profile.summaries else [],
+        experiences=[TailoredExperience(experience_id=e.id, bullets=[
+            TailoredBullet(source_bullet_id=b.id, text=b.text) for b in e.bullets]) for e in profile.experience],
+        skill_groups=[SkillGroup(category=c, skill_ids=ids) for c, ids in groups.items()],
+        project_ids=[p.id for p in profile.projects],
+        education_ids=[e.id for e in profile.education],
+        certification_ids=[c.id for c in profile.certifications],
+        publication_ids=[p.id for p in profile.publications],
+        language_ids=[l.id for l in profile.languages],
+        requirement_matches=[],
+    )

@@ -92,6 +92,21 @@ def cmd_fetch_job(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_web(args: argparse.Namespace) -> int:
+    import threading
+    import webbrowser
+
+    import uvicorn
+
+    from .web.app import create_app
+    url = f"http://{args.host}:{args.port}"
+    print(f"CV Studio running at {url}  (Ctrl+C to stop)")
+    if not args.no_browser:
+        threading.Timer(1.2, lambda: webbrowser.open(url)).start()
+    uvicorn.run(create_app(), host=args.host, port=args.port, log_level="warning")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="cvgen", description="Tailor your CV to a job posting.")
     ap.add_argument("--profile", default=str(DEFAULT_PROFILE), help="path to profile.yaml")
@@ -119,6 +134,12 @@ def main(argv: list[str] | None = None) -> int:
     f = sub.add_parser("fetch-job", help="preview what the tool reads from a job URL")
     f.add_argument("job")
     f.set_defaults(func=cmd_fetch_job)
+
+    w = sub.add_parser("web", help="start the CV Studio web app")
+    w.add_argument("--host", default="127.0.0.1")
+    w.add_argument("--port", type=int, default=8765)
+    w.add_argument("--no-browser", action="store_true")
+    w.set_defaults(func=cmd_web)
 
     args = ap.parse_args(argv)
     if getattr(args, "model", "x") is None:

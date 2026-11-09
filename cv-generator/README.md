@@ -13,6 +13,37 @@ your profile.yaml (facts database) ───────────┤
                      your Word template (.docx) ──► CV.docx ──► CV.pdf  + match_report.md
 ```
 
+## CV Studio: the web app (recommended)
+
+Run it on your computer:
+
+| | |
+|---|---|
+| **Windows** | double-click `start.bat` |
+| **macOS / Linux** | run `./start.sh` |
+| manually | `pip install -r requirements.txt` then `python -m cvgen web` |
+
+It opens at <http://127.0.0.1:8765>. You need Python 3.10+. For PDF export and previews,
+install [LibreOffice](https://www.libreoffice.org) (free). Without it you still get Word files.
+
+1. **Settings**: paste your Anthropic API key (from console.anthropic.com).
+2. **Knowledge**: upload everything about you: your current CV, your LinkedIn profile
+   (*More → Save to PDF*, or the *Get a copy of your data* ZIP), your XING profile PDF,
+   references, certificates, project notes, or your website's URL. Click **Build knowledge
+   base**. Claude extracts the facts and shows a review: every added or changed item,
+   conflicts between sources (e.g. different dates on LinkedIn and in the CV), numbers it could
+   not find in any source, and questions that would strengthen your profile. Nothing is saved
+   until you click *Save*. You can edit everything afterwards in the built-in editor.
+3. **Templates**: upload your current CV as `.docx`. Claude maps your layout to placeholders and
+   keeps your fonts, colours, photo and columns. A preview is rendered with your data.
+4. **New application**: paste a job link or the job text and click **Generate**. You get the
+   tailored CV (preview, PDF, Word), the requirements you meet and miss, talking points for the
+   cover letter, and a list of what the fact check corrected. *Change design* re-renders the
+   same content in another template without a new AI call.
+
+All your data stays in the `workspace/` folder on your computer (git-ignored). Only the
+documents you process are sent to the Anthropic API.
+
 ## How it keeps you honest
 
 The AI never writes facts. It only returns a *plan* that references items in your profile by id:
@@ -51,7 +82,7 @@ python -m cvgen check-profile
 `profile/profile.yaml`, your own template and `output/` are git-ignored, so your personal data
 stays on your computer.
 
-## Usage
+## Command line (alternative)
 
 ```bash
 # From a job URL

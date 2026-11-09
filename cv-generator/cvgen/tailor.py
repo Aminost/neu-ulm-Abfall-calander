@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import json
-import os
-
-import anthropic
 import yaml
 
+from .llm import DEFAULT_MODEL, LLMError, structured_call
 from .models import JobPosting, Profile, TailoringPlan
 
-DEFAULT_MODEL = os.environ.get("CVGEN_MODEL", "claude-opus-5-5")
+__all__ = ["DEFAULT_MODEL", "TailoringError", "tailor"]
 
 SYSTEM_PROMPT = """\
 You are an expert career coach and CV writer. You tailor a candidate's CV to one job posting.
@@ -77,40 +75,17 @@ def build_user_message(profile: Profile, job: JobPosting) -> str:
     )
 
 
-class TailoringError(RuntimeError):
-    pass
+TailoringError = LLMError
 
 
-def tailor(profile: Profile, job: JobPosting, model: str = DEFAULT_MODEL,
-           effort: str = "high", client: anthropic.Anthropic | None = None) -> TailoringPlan:
-    client = client or anthropic.Anthropic()
-    try:
-        response = client.messages.parse(
-            model=model,
-            max_tokens=16000,
-            system=SYSTEM_PROMPT,
-            thinking={"type": "adaptive"},
-            output_config={"effort": effort},
-            messages=[{"role": "user", "content": build_user_message(profile, job)}],
-            output_format=TailoringPlan,
-            # Server-side fallback: if a request is ever declined by a safety
-            # classifier, Anthropic re-runs it on a recommended fallback model.
-            extra_headers={"anthropic-beta": "server-side-fallback-2026-07-01"},
-            extra_body={"fallbacks": "default"},
-        )
-    except anthropic.AuthenticationError as exc:
-        raise TailoringError("Anthropic API key missing or invalid. Set ANTHROPIC_API_KEY.") from exc
-    except anthropic.RateLimitError as exc:
-        raise TailoringError("Rate limited by the Anthropic API - try again in a minute.") from exc
-    except anthropic.APIStatusError as exc:
-        raise TailoringError(f"Anthropic API error {exc.status_code}: {exc.message}") from exc
-    except anthropic.APIConnectionError as exc:
-        raise TailoringError(f"Could not reach the Anthropic API: {exc}") from exc
-
-    if response.stop_reason == "refusal":
-        raise TailoringError("The model declined this request.")
-    if response.stop_reason == "max_tokens":
-        raise TailoringError("The model ran out of output tokens; try a smaller profile.")
-    if response.parsed_output is None:
-        raise TailoringError("The model did not return a valid tailoring plan.")
-    return response.parsed_output
+def tailor(profile: Profile, job: JobPosting, model: str | None = None,
+           effort: str = "high", client=None) -> TailoringPlan:
+    return structured_call(
+        system=SYSTEM_PROMPT,
+        content=build_user_message(profile, job),
+        output_model=TailoringPlan,
+        model=model,
+        effort=effort,
+        max_tokens=32000,
+        client=client,
+    )
