@@ -1,24 +1,19 @@
 {
   "expo": {
-    "name": "Neu-Ulm Müllkalender",
+    "name": "Neu-Ulm Abfallkalender",
     "slug": "neu-ulm-muellkalender",
-    "version": "1.4.0",
+    "version": "1.5.0",
     "orientation": "portrait",
-    "icon": "assets/images/icon.png",
+    "icon": "./assets/images/icon.png",
     "scheme": "muellkalender",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "assets/images/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#10b981"
-    },
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "de.neuulm.muellkalender",
-      "buildNumber": "4",
+      "buildNumber": "5",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Wir verwenden deinen Standort, um deinen Abfuhrbezirk automatisch zu erkennen.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Wir verwenden deinen Standort, um deinen Abfuhrbezirk automatisch zu erkennen."
@@ -26,31 +21,45 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "assets/images/icon.png",
-        "backgroundColor": "#10b981"
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#059669"
       },
       "package": "de.neuulm.muellkalender",
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.POST_NOTIFICATIONS"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "com.google.android.gms.permission.AD_ID"
       ]
     },
     "web": {
       "bundler": "metro",
-      "favicon": "assets/images/icon.png",
+      "favicon": "./assets/images/favicon.png",
       "output": "single",
-      "name": "Neu-Ulm Müllkalender",
-      "themeColor": "#10b981",
+      "name": "Neu-Ulm Abfallkalender",
+      "themeColor": "#059669",
       "backgroundColor": "#f9fafb"
     },
     "plugins": [
       "expo-router",
       [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 180,
+          "resizeMode": "contain",
+          "backgroundColor": "#059669"
+        }
+      ],
+      [
         "expo-notifications",
         {
-          "icon": "assets/images/icon.png",
-          "color": "#10b981",
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#059669",
           "sounds": []
         }
       ],

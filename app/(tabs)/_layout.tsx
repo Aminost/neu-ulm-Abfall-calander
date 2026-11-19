@@ -1,9 +1,16 @@
-import { Tabs } from "expo-router";
+import { Tabs, Redirect } from "expo-router";
+import { useAppState } from "../../lib/appState";
 import { Calendar, Map, Settings } from "lucide-react-native";
 import { useTranslation } from "../../lib/i18n";
 
 export default function TabLayout() {
   const { t } = useTranslation();
+  const { isLoaded, onboardingDone } = useAppState();
+
+  // Wait for persisted state before deciding where to go (splash covers this).
+  if (!isLoaded) return null;
+  // First launch → welcome flow instead of the tabs.
+  if (!onboardingDone) return <Redirect href="/welcome" />;
 
   return (
     <Tabs
