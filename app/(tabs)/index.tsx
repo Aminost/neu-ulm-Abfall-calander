@@ -284,8 +284,8 @@ export default function HomeScreen() {
           Alert.alert(
             t("allowNotifs"),
             Platform.OS === "ios"
-              ? "Einstellungen → Mitteilungen → Neu-Ulm Müllkalender"
-              : "Einstellungen → Apps → Neu-Ulm Müllkalender → Benachrichtigungen"
+              ? "Einstellungen → Mitteilungen → Neu-Ulm Abfallkalender"
+              : "Einstellungen → Apps → Neu-Ulm Abfallkalender → Benachrichtigungen"
           );
           return;
         }

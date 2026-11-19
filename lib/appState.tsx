@@ -44,6 +44,10 @@ export interface AppStateValue {
   districtAutoDetected: boolean;
   /** False until the initial AsyncStorage load completes. */
   isLoaded: boolean;
+  /** True once the user finished the welcome flow (or is an existing user). */
+  onboardingDone: boolean;
+  /** Mark the welcome flow as finished. Persists to AsyncStorage. */
+  completeOnboarding: () => Promise<void>;
 
   /** Unix timestamp (ms) of the last successful data fetch for the active
    *  district. null if the cache has never been populated. */
@@ -110,6 +114,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [reminderTime,          setReminderTimeState]          = useState("18:00");
   const [districtAutoDetected,  setDistrictAutoDetectedState]  = useState(false);
   const [isLoaded,              setIsLoaded]                   = useState(false);
+  const [onboardingDone,        setOnboardingDone]             = useState(false);
   const [lastUpdated,           setLastUpdated]                = useState<number | null>(null);
   const [isRefreshing,          setIsRefreshing]               = useState(false);
 
@@ -136,10 +141,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       storage.getItem("remindersEnabled"),
       storage.getItem("reminderTime"),
       storage.getItem("districtAutoDetected"),
+      storage.getItem("onboardingComplete"),
     ])
-      .then(([district, addr, coordsStr, notifs, time, detected]) => {
+      .then(([district, addr, coordsStr, notifs, time, detected, onboarded]) => {
         if (cancelled) return;
-        if (district)            setDistrictIdState(parseInt(district, 10));
+        const parsedDistrict = district ? parseInt(district, 10) : NaN;
+        if (parsedDistrict >= 1 && parsedDistrict <= 8) setDistrictIdState(parsedDistrict);
+        // Users upgrading from ≤1.4 already picked a district — don't force
+        // them through the welcome flow again.
+        if (onboarded === "true" || district) setOnboardingDone(true);
         if (addr)                setAddressState(addr);
         if (coordsStr) {
           try {
@@ -257,6 +267,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     []
   );
 
+  const completeOnboarding = useCallback(async () => {
+    setOnboardingDone(true);
+    await storage.setItem("onboardingComplete", "true");
+  }, []);
+
   const updateNotifications = useCallback(async (enabled: boolean) => {
     setNotificationsEnabledState(enabled);
     await storage.setItem("remindersEnabled", enabled ? "true" : "false");
@@ -279,6 +294,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         reminderTime,
         districtAutoDetected,
         isLoaded,
+        onboardingDone,
+        completeOnboarding,
         lastUpdated,
         isRefreshing,
         updateDistrict,

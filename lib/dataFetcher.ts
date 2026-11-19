@@ -41,11 +41,29 @@ const SOFT_TTL_MS = 7  * 24 * 60 * 60 * 1000; // 7 days
 /** Force fresh fetch (still serves cache while waiting). */
 const HARD_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
-const USER_AGENT = "NeuUlmMuellkalender/2.0 (https://github.com/aminoste/neu-ulm-muellkalender)";
+const USER_AGENT = "NeuUlmAbfallkalender/1.5 (https://github.com/Aminost/neu-ulm-Abfall-calander)";
 
 // ── API base ───────────────────────────────────────────────────────────────────
 
+/**
+ * Cross-platform replacement for `AbortSignal.timeout(ms)`.
+ *
+ * React Native's AbortController polyfill (abort-controller@3) does NOT
+ * implement the static `AbortSignal.timeout()` — calling it on Android/iOS
+ * throws "undefined is not a function", which silently broke every network
+ * request (address search, ICS refresh) in native builds.
+ */
+function timeoutSignal(ms: number): AbortSignal {
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), ms);
+  return controller.signal;
+}
+
 function getApiBase(): string {
+  // The proxy only exists to work around CORS in the browser. Native apps
+  // talk to the city website and Nominatim directly — never route them
+  // through a (possibly unconfigured) proxy.
+  if (Platform.OS !== "web") return "";
   const envUrl = process.env.EXPO_PUBLIC_API_URL;
   if (envUrl) return envUrl.replace(/\/$/, "");
   const extra = Constants.expoConfig?.extra as { apiUrl?: string } | undefined;
@@ -226,7 +244,7 @@ async function _fetchRawIcs(districtId: number): Promise<string | null> {
   if (apiBase) {
     try {
       const res = await fetch(`${apiBase}/api/ics?districtId=${districtId}`, {
-        signal: AbortSignal.timeout(12_000),
+        signal: timeoutSignal(12_000),
       });
       if (res.ok) {
         const text = await res.text();
@@ -243,7 +261,7 @@ async function _fetchRawIcs(districtId: number): Promise<string | null> {
       const url = await resolveDirectIcsUrl(districtId);
       if (url) {
         const res = await fetch(url, {
-          signal: AbortSignal.timeout(15_000),
+          signal: timeoutSignal(15_000),
           headers: { "User-Agent": USER_AGENT },
         });
         if (res.ok) {
@@ -279,7 +297,7 @@ async function _tryFallbackUrls(districtId: number): Promise<string | null> {
     try {
       const res = await fetch(url, {
         method: "HEAD",
-        signal: AbortSignal.timeout(5_000),
+        signal: timeoutSignal(5_000),
         headers: { "User-Agent": USER_AGENT },
       });
       if (res.ok) return url;
@@ -298,7 +316,7 @@ async function resolveDirectIcsUrl(districtId: number): Promise<string | null> {
       const res = await fetch(
         "https://nu.neu-ulm.de/buerger-service/leben-in-neu-ulm/abfall-sauberkeit/abfallkalender/",
         {
-          signal: AbortSignal.timeout(10_000),
+          signal: timeoutSignal(10_000),
           headers: { "User-Agent": USER_AGENT },
         }
       );
@@ -378,7 +396,7 @@ export async function searchAddress(query: string): Promise<NominatimResult[]> {
       `&viewbox=${viewbox}&bounded=1`;
 
   const res = await fetch(url, {
-    signal: AbortSignal.timeout(10_000),
+    signal: timeoutSignal(10_000),
     headers: nominatimHeaders(),
   });
   if (!res.ok) throw new Error(`Search failed: ${res.status}`);
@@ -412,7 +430,7 @@ export async function reverseGeocode(
     : `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&addressdetails=1`;
 
   const res = await fetch(url, {
-    signal: AbortSignal.timeout(10_000),
+    signal: timeoutSignal(10_000),
     headers: nominatimHeaders(),
   });
   if (!res.ok) throw new Error(`Reverse geocoding failed: ${res.status}`);
