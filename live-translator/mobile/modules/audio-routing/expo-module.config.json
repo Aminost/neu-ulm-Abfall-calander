@@ -1,0 +1,5 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": { "modules": ["AudioRoutingModule"] },
+  "android": { "modules": ["expo.modules.audiorouting.AudioRoutingModule"] }
+}

@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "Live Translator",
+    "slug": "live-translator",
+    "scheme": "livetranslator",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "com.aminost.livetranslator",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "The microphone is used to hear the conversation so it can be translated live.",
+        "NSBluetoothAlwaysUsageDescription": "Bluetooth is used to route each speaker's audio to the right headset.",
+        "UIBackgroundModes": ["audio"]
+      }
+    },
+    "android": {
+      "package": "com.aminost.livetranslator",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.INTERNET"
+      ]
+    },
+    "plugins": [
+      ["expo-build-properties", { "android": { "minSdkVersion": 26 } }]
+    ]
+  }
+}

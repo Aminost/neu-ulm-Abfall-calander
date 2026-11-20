@@ -27,6 +27,7 @@
   "exclude": [
     "node_modules",
     "check_zones.ts",
-    "map.web.tsx"
+    "map.web.tsx",
+    "live-translator"
   ]
 }

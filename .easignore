@@ -47,3 +47,6 @@ dist/
 *.apk
 build_log*.txt
 .claude/
+
+# Separate app (live translator) with its own build
+live-translator/

@@ -1,0 +1,33 @@
+{
+  "name": "live-translator",
+  "private": true,
+  "version": "0.1.0",
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start --dev-client",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "build:dev": "eas build --profile development --platform all",
+    "build:android": "eas build --platform android",
+    "build:ios": "eas build --platform ios",
+    "type-check": "tsc --noEmit",
+    "test": "tsx --test src/engine/*.test.ts"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "expo": "~58.0.26",
+    "expo-build-properties": "~58.0.12",
+    "expo-dev-client": "~58.0.21",
+    "expo-keep-awake": "~58.0.4",
+    "expo-status-bar": "~58.0.5",
+    "react": "^19.3.0",
+    "react-native": "^0.88.1",
+    "react-native-safe-area-context": "~5.11.1",
+    "zustand": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.0",
+    "tsx": "^4.23.15",
+    "typescript": "~5.9.0"
+  }
+}
