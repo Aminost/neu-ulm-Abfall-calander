@@ -39,6 +39,7 @@ import type { CollectionEvent, WasteType } from "../../lib/icsParser";
 import { useTranslation } from "../../lib/i18n";
 import type { Language } from "../../lib/i18n";
 import { useAppState } from "../../lib/appState";
+import SourceNotice from "../../components/SourceNotice";
 import {
   requestNotificationPermission,
   scheduleReminders,
@@ -674,6 +675,7 @@ export default function HomeScreen() {
             </View>
           </View>
         )}
+        <SourceNotice />
       </ScrollView>
     </SafeAreaView>
   );

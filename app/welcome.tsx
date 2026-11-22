@@ -33,6 +33,7 @@ import {
   ShieldCheck,
 } from "lucide-react-native";
 import AppLogo from "../components/AppLogo";
+import SourceNotice from "../components/SourceNotice";
 import { useTranslation, type Language } from "../lib/i18n";
 import { useAppState } from "../lib/appState";
 import { BEZIRKE } from "../lib/constants";
@@ -292,6 +293,7 @@ export default function WelcomeScreen() {
                     <ShieldCheck size={14} color="#6b7280" />
                     <Text style={styles.privacyText}>{t("privacyNote")}</Text>
                   </View>
+                  <SourceNotice variant="compact" />
                 </View>
               </View>
             </View>

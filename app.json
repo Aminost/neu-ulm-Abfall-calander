@@ -2,7 +2,7 @@
   "expo": {
     "name": "Neu-Ulm Abfallkalender",
     "slug": "neu-ulm-muellkalender",
-    "version": "1.5.0",
+    "version": "1.5.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "muellkalender",
@@ -13,7 +13,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "de.neuulm.muellkalender",
-      "buildNumber": "5",
+      "buildNumber": "6",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Wir verwenden deinen Standort, um deinen Abfuhrbezirk automatisch zu erkennen.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Wir verwenden deinen Standort, um deinen Abfuhrbezirk automatisch zu erkennen."

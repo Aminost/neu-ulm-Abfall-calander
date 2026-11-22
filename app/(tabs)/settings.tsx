@@ -45,6 +45,8 @@ import {
 import { useTranslation } from "../../lib/i18n";
 import type { Language } from "../../lib/i18n";
 import { useAppState } from "../../lib/appState";
+import SourceNotice from "../../components/SourceNotice";
+import Constants from "expo-constants";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -709,10 +711,16 @@ export default function SettingsScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 14, fontWeight: "600", color: "#111827" }}>{t("version")}</Text>
-              <Text style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>1.4.0</Text>
+              <Text style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>{Constants.expoConfig?.version ?? ""}</Text>
             </View>
           </View>
         </Card>
+
+        {/* ── Disclaimer & official source (Play Misleading Claims policy) ── */}
+        <SectionHeader title={t("legalNotice")} />
+        <View style={{ marginTop: -24 }}>
+          <SourceNotice />
+        </View>
       </ScrollView>
     </SafeAreaView>
   );

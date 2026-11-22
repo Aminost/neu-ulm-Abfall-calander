@@ -25,6 +25,7 @@ import {
 } from "../../lib/districtDetector";
 import { useTranslation } from "../../lib/i18n";
 import { useAppState } from "../../lib/appState";
+import SourceNotice from "../../components/SourceNotice";
 
 // ── Filter configuration ────────────────────────────────────────────────────────
 
@@ -647,7 +648,7 @@ export default function MapScreen() {
 
       {/* ── Map ── */}
       <View
-        className="flex-1 mx-4 mb-4 rounded-3xl overflow-hidden border border-gray-100"
+        className="flex-1 mx-4 mb-1 rounded-3xl overflow-hidden border border-gray-100"
         style={{ shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 12, elevation: 3 }}
       >
         <WebView
@@ -672,6 +673,7 @@ export default function MapScreen() {
           startInLoadingState
         />
       </View>
+      <SourceNotice variant="compact" />
     </SafeAreaView>
   );
 }
